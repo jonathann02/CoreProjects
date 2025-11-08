@@ -1,0 +1,6 @@
+<Project>
+  <Target Name="EnsureNoSecurityWarnings" AfterTargets="Build">
+    <Error Condition="'$(TargetFramework)' == 'net8.0' AND $([System.Text.RegularExpressions.Regex]::IsMatch($(OutputPath), '.*CA\d+.*'))"
+           Text="Security-related code analysis warnings must be addressed before build can succeed." />
+  </Target>
+</Project>
