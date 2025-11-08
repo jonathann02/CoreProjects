@@ -1,9 +1,10 @@
 using Catalog.Application.Commands;
 using Catalog.Domain;
+using MediatR;
 
 namespace Catalog.Application.Handlers;
 
-public class DeleteProductCommandHandler
+public class DeleteProductCommandHandler : IRequestHandler<DeleteProductCommand>
 {
     private readonly IProductRepository _productRepository;
 
@@ -12,12 +13,12 @@ public class DeleteProductCommandHandler
         _productRepository = productRepository;
     }
 
-    public async Task HandleAsync(DeleteProductCommand command, CancellationToken cancellationToken = default)
+    public async Task Handle(DeleteProductCommand request, CancellationToken cancellationToken)
     {
-        var product = await _productRepository.GetByIdAsync(command.Id, cancellationToken);
+        var product = await _productRepository.GetByIdAsync(request.Id, cancellationToken);
         if (product is null)
         {
-            throw new InvalidOperationException($"Product with ID {command.Id} not found");
+            throw new InvalidOperationException($"Product with ID {request.Id} not found");
         }
 
         product.Deactivate();

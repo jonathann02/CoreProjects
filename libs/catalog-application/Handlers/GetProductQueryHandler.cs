@@ -1,10 +1,11 @@
 using Catalog.Application.DTOs;
 using Catalog.Application.Queries;
 using Catalog.Domain;
+using MediatR;
 
 namespace Catalog.Application.Handlers;
 
-public class GetProductQueryHandler
+public class GetProductQueryHandler : IRequestHandler<GetProductQuery, ProductDto?>
 {
     private readonly IProductRepository _productRepository;
 
@@ -13,9 +14,9 @@ public class GetProductQueryHandler
         _productRepository = productRepository;
     }
 
-    public async Task<ProductDto?> HandleAsync(GetProductQuery query, CancellationToken cancellationToken = default)
+    public async Task<ProductDto?> Handle(GetProductQuery request, CancellationToken cancellationToken)
     {
-        var product = await _productRepository.GetByIdAsync(query.Id, cancellationToken);
+        var product = await _productRepository.GetByIdAsync(request.Id, cancellationToken);
         if (product is null)
         {
             return null;

@@ -40,15 +40,20 @@ builder.Services.AddDbContext<CatalogDbContext>(options =>
     options.UseSqlServer(connectionString);
 });
 
+// Database connection for Dapper
+builder.Services.AddScoped<IDbConnection>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var connectionString = configuration.GetConnectionString("CatalogDatabase")
+        ?? throw new InvalidOperationException("Database connection string is required");
+    return new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+});
+
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
-// Application handlers
-builder.Services.AddScoped<CreateProductCommandHandler>();
-builder.Services.AddScoped<UpdateProductCommandHandler>();
-builder.Services.AddScoped<DeleteProductCommandHandler>();
-builder.Services.AddScoped<GetProductQueryHandler>();
-builder.Services.AddScoped<GetProductsQueryHandler>();
+// MediatR
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateProductCommand).Assembly));
 
 // Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

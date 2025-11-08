@@ -1,3 +1,6 @@
+using Catalog.Application.DTOs;
+using MediatR;
+
 namespace Catalog.Application.Commands;
 
 public record CreateProductCommand(
@@ -6,4 +9,4 @@ public record CreateProductCommand(
     string Description,
     decimal Price,
     string Currency,
-    int StockQty);
+    int StockQty) : IRequest<ProductDto>;

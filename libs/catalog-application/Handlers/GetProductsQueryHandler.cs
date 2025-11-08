@@ -1,10 +1,11 @@
 using Catalog.Application.DTOs;
 using Catalog.Application.Queries;
 using Catalog.Domain;
+using MediatR;
 
 namespace Catalog.Application.Handlers;
 
-public class GetProductsQueryHandler
+public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, PagedResult<ProductDto>>
 {
     private readonly IProductRepository _productRepository;
 
@@ -13,28 +14,28 @@ public class GetProductsQueryHandler
         _productRepository = productRepository;
     }
 
-    public async Task<PagedResult<ProductDto>> HandleAsync(GetProductsQuery query, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<ProductDto>> Handle(GetProductsQuery request, CancellationToken cancellationToken)
     {
         // Validate and sanitize sort parameters
         var allowedSortFields = new[] { "Name", "Sku", "Price", "CreatedAt", "UpdatedAt" };
-        var sortBy = allowedSortFields.Contains(query.SortBy ?? "Name", StringComparer.OrdinalIgnoreCase)
-            ? query.SortBy
+        var sortBy = allowedSortFields.Contains(request.SortBy ?? "Name", StringComparer.OrdinalIgnoreCase)
+            ? request.SortBy
             : "Name";
 
-        var sortOrder = (query.SortOrder ?? "asc").ToLowerInvariant() == "desc" ? "desc" : "asc";
+        var sortOrder = (request.SortOrder ?? "asc").ToLowerInvariant() == "desc" ? "desc" : "asc";
 
-        var page = Math.Max(1, query.Page);
-        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
 
         var products = await _productRepository.GetPagedAsync(
             page,
             pageSize,
-            query.Search,
+            request.Search,
             sortBy,
             sortOrder,
             cancellationToken);
 
-        var totalCount = await _productRepository.GetTotalCountAsync(query.Search, cancellationToken);
+        var totalCount = await _productRepository.GetTotalCountAsync(request.Search, cancellationToken);
         var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
         var productDtos = products.Select(p => new ProductDto(

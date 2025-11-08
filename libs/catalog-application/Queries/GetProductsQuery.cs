@@ -1,3 +1,6 @@
+using Catalog.Application.DTOs;
+using MediatR;
+
 namespace Catalog.Application.Queries;
 
 public record GetProductsQuery(
@@ -5,4 +8,4 @@ public record GetProductsQuery(
     int Page = 1,
     int PageSize = 20,
     string? SortBy = "Name",
-    string? SortOrder = "asc");
+    string? SortOrder = "asc") : IRequest<PagedResult<ProductDto>>;

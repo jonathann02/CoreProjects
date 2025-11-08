@@ -1,41 +1,18 @@
 using System.Data;
 using Catalog.Domain;
 using Dapper;
-using Microsoft.EntityFrameworkCore;
 
 namespace Catalog.Infrastructure;
 
-public class ProductRepository : IProductRepository
+public class ProductReadRepository : IProductReadRepository
 {
-    private readonly CatalogDbContext _dbContext;
-    private readonly IDbConnection _dbConnection;
+    private readonly IDbConnection _connection;
 
-    public ProductRepository(CatalogDbContext dbContext, IDbConnection dbConnection)
+    public ProductReadRepository(IDbConnection connection)
     {
-        _dbContext = dbContext;
-        _dbConnection = dbConnection;
+        _connection = connection;
     }
 
-    // Write operations using EF Core
-    public async Task AddAsync(Product product, CancellationToken cancellationToken = default)
-    {
-        var entity = MapToEntity(product);
-        await _dbContext.Products.AddAsync(entity, cancellationToken);
-    }
-
-    public Task UpdateAsync(Product product, CancellationToken cancellationToken = default)
-    {
-        var entity = MapToEntity(product);
-        _dbContext.Products.Update(entity);
-        return Task.CompletedTask;
-    }
-
-    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        await _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    // Read operations using Dapper
     public async Task<Product?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -43,7 +20,7 @@ public class ProductRepository : IProductRepository
             FROM Products
             WHERE Id = @Id AND IsActive = 1";
 
-        var readModel = await _dbConnection.QuerySingleOrDefaultAsync<ProductReadModel>(sql, new { Id = id });
+        var readModel = await _connection.QuerySingleOrDefaultAsync<ProductReadModel>(sql, new { Id = id });
         return readModel is null ? null : MapToDomain(readModel);
     }
 
@@ -54,20 +31,8 @@ public class ProductRepository : IProductRepository
             FROM Products
             WHERE Sku = @Sku AND IsActive = 1";
 
-        var readModel = await _dbConnection.QuerySingleOrDefaultAsync<ProductReadModel>(sql, new { Sku = sku });
+        var readModel = await _connection.QuerySingleOrDefaultAsync<ProductReadModel>(sql, new { Sku = sku });
         return readModel is null ? null : MapToDomain(readModel);
-    }
-
-    public async Task<IEnumerable<Product>> GetAllAsync(CancellationToken cancellationToken = default)
-    {
-        const string sql = @"
-            SELECT Id, Sku, Name, Description, Price, Currency, StockQty, IsActive, CreatedAt, UpdatedAt
-            FROM Products
-            WHERE IsActive = 1
-            ORDER BY Name";
-
-        var readModels = await _dbConnection.QueryAsync<ProductReadModel>(sql);
-        return readModels.Select(MapToDomain);
     }
 
     public async Task<IEnumerable<Product>> GetPagedAsync(int page, int pageSize, string? search = null, string? sortBy = null, string? sortOrder = null, CancellationToken cancellationToken = default)
@@ -108,7 +73,7 @@ public class ProductRepository : IProductRepository
         parameters.Add("@Offset", offset);
         parameters.Add("@PageSize", pageSize);
 
-        var readModels = await _dbConnection.QueryAsync<ProductReadModel>(sql, parameters);
+        var readModels = await _connection.QueryAsync<ProductReadModel>(sql, parameters);
         return readModels.Select(MapToDomain);
     }
 
@@ -124,7 +89,7 @@ public class ProductRepository : IProductRepository
         }
 
         var sql = $"SELECT COUNT(*) FROM Products {whereClause}";
-        return await _dbConnection.ExecuteScalarAsync<int>(sql, parameters);
+        return await _connection.ExecuteScalarAsync<int>(sql, parameters);
     }
 
     private static Product MapToDomain(ProductReadModel readModel)
@@ -146,22 +111,5 @@ public class ProductRepository : IProductRepository
         updatedAtField?.SetValue(product, readModel.UpdatedAt);
 
         return product;
-    }
-
-    private static ProductEntity MapToEntity(Product product)
-    {
-        return new ProductEntity
-        {
-            Id = product.Id,
-            Sku = product.Sku,
-            Name = product.Name,
-            Description = product.Description,
-            Price = product.Price,
-            Currency = product.Currency,
-            StockQty = product.StockQty,
-            IsActive = product.IsActive,
-            CreatedAt = product.CreatedAt,
-            UpdatedAt = product.UpdatedAt
-        };
     }
 }

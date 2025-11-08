@@ -2,8 +2,8 @@ using System.ComponentModel.DataAnnotations;
 using Catalog.Api.Validation;
 using Catalog.Application.Commands;
 using Catalog.Application.DTOs;
-using Catalog.Application.Handlers;
 using Catalog.Application.Queries;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Catalog.Api.Endpoints;
@@ -16,155 +16,129 @@ public static class ProductEndpoints
             .WithTags("Products")
             .WithOpenApi();
 
-        // POST /v1/products - Create product
-        products.MapPost("/", async (
-            [FromBody] CreateProductRequest request,
-            CreateProductCommandHandler handler,
-            CancellationToken cancellationToken) =>
-        {
-            var command = new CreateProductCommand(
-                request.Sku,
-                request.Name,
-                request.Description ?? "",
-                request.Price,
-                request.Currency,
-                request.StockQty);
+// POST /v1/products - Create product
+products.MapPost("/", async (
+    [FromBody] CreateProductRequest request,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    var command = new CreateProductCommand(
+        request.Sku,
+        request.Name,
+        request.Description ?? "",
+        request.Price,
+        request.Currency,
+        request.StockQty);
 
-            var product = await handler.HandleAsync(command, cancellationToken);
-
-            var response = new ProductDto(
-                product.Id,
-                product.Sku,
-                product.Name,
-                product.Description,
-                product.Price,
-                product.Currency,
-                product.StockQty,
-                product.IsActive,
-                product.CreatedAt,
-                product.UpdatedAt);
-
-            return Results.Created($"/v1/products/{product.Id}", response);
-        })
+    var response = await mediator.Send(command, cancellationToken);
+    return Results.Created($"/v1/products/{response.Id}", response);
+})
         .WithSummary("Create a new product")
         .RequireAuthorization("products:write")
         .WithValidation<CreateProductRequest>();
 
-        // GET /v1/products/{id} - Get product by ID
-        products.MapGet("/{id:guid}", async (
-            Guid id,
-            GetProductQueryHandler handler,
-            CancellationToken cancellationToken) =>
-        {
-            var query = new GetProductQuery(id);
-            var product = await handler.HandleAsync(query, cancellationToken);
+// GET /v1/products/{id} - Get product by ID
+products.MapGet("/{id:guid}", async (
+    Guid id,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    var query = new GetProductQuery(id);
+    var product = await mediator.Send(query, cancellationToken);
 
-            return product is not null
-                ? Results.Ok(product)
-                : Results.NotFound(new ProblemDetails
-                {
-                    Title = "Product not found",
-                    Detail = $"No product found with ID {id}",
-                    Status = StatusCodes.Status404NotFound,
-                    Type = "https://tools.ietf.org/html/rfc7231#section-6.5.4"
-                });
-        })
+    return product is not null
+        ? Results.Ok(product)
+        : Results.NotFound(new ProblemDetails
+        {
+            Title = "Product not found",
+            Detail = $"No product found with ID {id}",
+            Status = StatusCodes.Status404NotFound,
+            Type = "https://tools.ietf.org/html/rfc7231#section-6.5.4"
+        });
+})
         .WithSummary("Get a product by ID")
         .Produces<ProductDto>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status404NotFound);
 
-        // GET /v1/products - Get products with pagination
-        products.MapGet("/", async (
-            [AsParameters] GetProductsRequest request,
-            GetProductsQueryHandler handler,
-            CancellationToken cancellationToken) =>
-        {
-            var query = new GetProductsQuery(
-                request.Search,
-                request.Page,
-                request.PageSize,
-                request.SortBy,
-                request.SortOrder);
+// GET /v1/products - Get products with pagination
+products.MapGet("/", async (
+    [AsParameters] GetProductsRequest request,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    var query = new GetProductsQuery(
+        request.Search,
+        request.Page,
+        request.PageSize,
+        request.SortBy,
+        request.SortOrder);
 
-            var result = await handler.HandleAsync(query, cancellationToken);
-            return Results.Ok(result);
-        })
+    var result = await mediator.Send(query, cancellationToken);
+    return Results.Ok(result);
+})
         .WithSummary("Get products with pagination and filtering")
         .Produces<PagedResult<ProductDto>>(StatusCodes.Status200OK)
         .WithValidation<GetProductsRequest>();
 
-        // PUT /v1/products/{id} - Update product
-        products.MapPut("/{id:guid}", async (
-            Guid id,
-            [FromBody] UpdateProductRequest request,
-            UpdateProductCommandHandler handler,
-            CancellationToken cancellationToken) =>
+// PUT /v1/products/{id} - Update product
+products.MapPut("/{id:guid}", async (
+    Guid id,
+    [FromBody] UpdateProductRequest request,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    var command = new UpdateProductCommand(
+        id,
+        request.Name,
+        request.Description ?? "",
+        request.Price,
+        request.Currency,
+        request.StockQty);
+
+    try
+    {
+        var response = await mediator.Send(command, cancellationToken);
+        return Results.Ok(response);
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.NotFound(new ProblemDetails
         {
-            var command = new UpdateProductCommand(
-                id,
-                request.Name,
-                request.Description ?? "",
-                request.Price,
-                request.Currency,
-                request.StockQty);
-
-            try
-            {
-                var product = await handler.HandleAsync(command, cancellationToken);
-
-                var response = new ProductDto(
-                    product.Id,
-                    product.Sku,
-                    product.Name,
-                    product.Description,
-                    product.Price,
-                    product.Currency,
-                    product.StockQty,
-                    product.IsActive,
-                    product.CreatedAt,
-                    product.UpdatedAt);
-
-                return Results.Ok(response);
-            }
-            catch (InvalidOperationException)
-            {
-                return Results.NotFound(new ProblemDetails
-                {
-                    Title = "Product not found",
-                    Detail = $"No product found with ID {id}",
-                    Status = StatusCodes.Status404NotFound,
-                    Type = "https://tools.ietf.org/html/rfc7231#section-6.5.4"
-                });
-            }
-        })
+            Title = "Product not found",
+            Detail = $"No product found with ID {id}",
+            Status = StatusCodes.Status404NotFound,
+            Type = "https://tools.ietf.org/html/rfc7231#section-6.5.4"
+        });
+    }
+})
         .WithSummary("Update an existing product")
         .RequireAuthorization("products:write")
         .WithValidation<UpdateProductRequest>();
 
-        // DELETE /v1/products/{id} - Soft delete product
-        products.MapDelete("/{id:guid}", async (
-            Guid id,
-            DeleteProductCommandHandler handler,
-            CancellationToken cancellationToken) =>
-        {
-            var command = new DeleteProductCommand(id);
+// DELETE /v1/products/{id} - Soft delete product
+products.MapDelete("/{id:guid}", async (
+    Guid id,
+    IMediator mediator,
+    CancellationToken cancellationToken) =>
+{
+    var command = new DeleteProductCommand(id);
 
-            try
-            {
-                await handler.HandleAsync(command, cancellationToken);
-                return Results.NoContent();
-            }
-            catch (InvalidOperationException)
-            {
-                return Results.NotFound(new ProblemDetails
-                {
-                    Title = "Product not found",
-                    Detail = $"No product found with ID {id}",
-                    Status = StatusCodes.Status404NotFound,
-                    Type = "https://tools.ietf.org/html/rfc7231#section-6.5.4"
-                });
-            }
-        })
+    try
+    {
+        await mediator.Send(command, cancellationToken);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.NotFound(new ProblemDetails
+        {
+            Title = "Product not found",
+            Detail = $"No product found with ID {id}",
+            Status = StatusCodes.Status404NotFound,
+            Type = "https://tools.ietf.org/html/rfc7231#section-6.5.4"
+        });
+    }
+})
         .WithSummary("Soft delete a product")
         .RequireAuthorization("products:write");
     }
