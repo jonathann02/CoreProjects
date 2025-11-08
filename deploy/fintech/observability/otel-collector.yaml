@@ -1,0 +1,68 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Prometheus receiver for scraping metrics
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          static_configs:
+            - targets: ['otel-collector:8889']
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 1s
+
+  # Add resource attributes
+  resource:
+    attributes:
+      - key: service.namespace
+        value: "fintech-platform"
+        action: upsert
+
+exporters:
+  # Export to Prometheus
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+  # Export to Jaeger
+  jaeger:
+    endpoint: "jaeger:14250"
+    tls:
+      insecure: true
+
+  # Debug exporter for development
+  logging:
+    loglevel: debug
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [jaeger, logging]
+
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [resource, batch]
+      exporters: [prometheus, logging]
+
+    logs:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [logging]
+
+  # Extensions for health checks and performance profiling
+  extensions:
+    health_check:
+      endpoint: "0.0.0.0:13133"
+    pprof:
+      endpoint: "0.0.0.0:1777"
+    zpages:
+      endpoint: "0.0.0.0:55679"
