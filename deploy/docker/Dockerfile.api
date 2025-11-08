@@ -1,0 +1,36 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy csproj files and restore dependencies
+COPY ["services/catalog-api/Catalog.Api.csproj", "services/catalog-api/"]
+COPY ["libs/catalog-domain/Catalog.Domain.csproj", "libs/catalog-domain/"]
+COPY ["libs/catalog-application/Catalog.Application.csproj", "libs/catalog-application/"]
+COPY ["libs/catalog-infrastructure/Catalog.Infrastructure.csproj", "libs/catalog-infrastructure/"]
+COPY ["CatalogSuite.sln", "."]
+
+RUN dotnet restore "CatalogSuite.sln"
+
+# Copy everything else and build
+COPY . .
+WORKDIR "/src/services/catalog-api"
+RUN dotnet build "Catalog.Api.csproj" -c Release -o /app/build
+
+# Publish stage
+FROM build AS publish
+RUN dotnet publish "Catalog.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+
+# Create non-root user
+RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /app
+USER appuser
+
+COPY --from=publish /app/publish .
+
+EXPOSE 8080
+EXPOSE 8081
+
+ENTRYPOINT ["dotnet", "Catalog.Api.dll"]
