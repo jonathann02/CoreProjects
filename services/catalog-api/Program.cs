@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using AspNetCoreRateLimit;
@@ -7,6 +8,7 @@ using Catalog.Domain;
 using Catalog.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
@@ -93,6 +95,11 @@ builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounte
 builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 builder.Services.AddInMemoryRateLimiting();
+
+// Data Protection (for production, use Azure Key Vault or similar)
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/app/data-protection-keys"))
+    .SetApplicationName("CatalogSuite");
 
 // CORS (restrictive policy for development)
 builder.Services.AddCors(options =>
