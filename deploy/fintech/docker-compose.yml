@@ -1,0 +1,413 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: fintech-postgres
+    environment:
+      POSTGRES_DB: fintech
+      POSTGRES_USER: fintech_user
+      POSTGRES_PASSWORD: fintech_pass
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fintech_user -d fintech"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fintech
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: fintech-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass fintech_redis_pass
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fintech
+
+  # Redpanda (Kafka-compatible) for event streaming
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.3
+    container_name: fintech-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr 0.0.0.0:8082
+      - --advertise-pandaproxy-addr localhost:8082
+      - --schema-registry-addr 0.0.0.0:8081
+      - --rpc-addr 0.0.0.0:33145
+      - --advertise-rpc-addr redpanda:33145
+    ports:
+      - "19092:19092"  # Kafka external
+      - "8082:8082"    # HTTP Proxy
+      - "8081:8081"    # Schema Registry
+      - "9644:9644"    # Admin API
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+  # Redpanda Console for monitoring
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.5
+    container_name: fintech-redpanda-console
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_SCHEMA_REGISTRY_URL: http://redpanda:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - fintech
+
+  # LocalStack for AWS service emulation
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: fintech-localstack
+    environment:
+      SERVICES: s3,sns,sqs,iam,sts,cloudformation
+      DEBUG: 1
+      DATA_DIR: /tmp/localstack/data
+      DOCKER_HOST: unix:///var/run/docker.sock
+      HOST_TMP_FOLDER: ${TMPDIR:-/tmp}/localstack
+      LAMBDA_EXECUTOR: docker-reuse
+      PERSISTENCE: 1
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # External services port range
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack_data:/tmp/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+  # Keycloak for Identity and Access Management
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    container_name: fintech-keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/fintech_keycloak
+      KC_DB_USERNAME: fintech_user
+      KC_DB_PASSWORD: fintech_pass
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HEALTH_ENABLED: true
+    command: start-dev
+    ports:
+      - "8081:8080"  # Keycloak UI
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: localhost\r\nConnection: close\r\n\r\n' >&3;grep -q '200 OK' <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.89.0
+    container_name: fintech-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "55679:55679" # ZPages
+    depends_on:
+      jaeger:
+        condition: service_started
+      prometheus:
+        condition: service_started
+    networks:
+      - fintech
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: fintech-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # Accept jaeger.thrift over HTTP
+      - "14250:14250" # Accept jaeger.thrift over gRPC
+    volumes:
+      - jaeger_data:/tmp
+    networks:
+      - fintech
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: fintech-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - fintech
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: fintech-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+    networks:
+      - fintech
+
+  # Accounts Service (Spring Boot)
+  accounts-service:
+    build:
+      context: ../../../services/fintech/accounts
+      dockerfile: Dockerfile
+    container_name: fintech-accounts
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fintech
+      SPRING_DATASOURCE_USERNAME: fintech_user
+      SPRING_DATASOURCE_PASSWORD: fintech_pass
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_PRODUCER_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/fintech
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: accounts-service
+    ports:
+      - "8082:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+  # Payments Service (Spring Boot)
+  payments-service:
+    build:
+      context: ../../../services/fintech/payments
+      dockerfile: Dockerfile
+    container_name: fintech-payments
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fintech
+      SPRING_DATASOURCE_USERNAME: fintech_user
+      SPRING_DATASOURCE_PASSWORD: fintech_pass
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_PRODUCER_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: fintech_redis_pass
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/fintech
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: payments-service
+    ports:
+      - "8083:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      accounts-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+  # Limits Service (Go)
+  limits-service:
+    build:
+      context: ../../../services/fintech/limits
+      dockerfile: Dockerfile
+    container_name: fintech-limits
+    environment:
+      DATABASE_URL: postgres://fintech_user:fintech_pass@postgres:5432/fintech?sslmode=disable
+      KAFKA_BROKERS: redpanda:9092
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: limits-service
+    ports:
+      - "8084:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+  # Notifications Service (Go)
+  notifications-service:
+    build:
+      context: ../../../services/fintech/notifications
+      dockerfile: Dockerfile
+    container_name: fintech-notifications
+    environment:
+      DATABASE_URL: postgres://fintech_user:fintech_pass@postgres:5432/fintech?sslmode=disable
+      KAFKA_BROKERS: redpanda:9092
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      SNS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:fintech-notifications
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/fintech-notifications-queue
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: notifications-service
+    ports:
+      - "8085:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+  # Gateway Service (Node.js/TypeScript)
+  gateway:
+    build:
+      context: ../../../apps/fintech/gateway
+      dockerfile: Dockerfile
+    container_name: fintech-gateway
+    environment:
+      NODE_ENV: development
+      ACCOUNTS_SERVICE_URL: http://accounts-service:8080
+      PAYMENTS_SERVICE_URL: http://payments-service:8080
+      LIMITS_SERVICE_URL: http://limits-service:8080
+      REDIS_URL: redis://:fintech_redis_pass@redis:6379
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/fintech
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: gateway
+    ports:
+      - "4000:4000"  # GraphQL
+      - "3000:3000"  # REST API
+    depends_on:
+      accounts-service:
+        condition: service_healthy
+      payments-service:
+        condition: service_healthy
+      limits-service:
+        condition: service_healthy
+      notifications-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fintech
+
+volumes:
+  postgres_data:
+  redis_data:
+  redpanda_data:
+  localstack_data:
+  jaeger_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  fintech:
+    driver: bridge
