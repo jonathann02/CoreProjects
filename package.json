@@ -1,0 +1,23 @@
+{
+  "name": "coreprojects",
+  "version": "1.0.0",
+  "description": "Monorepo containing Catalog Service (.NET) and FinTech Platform (Java/Kotlin/Go/Node)",
+  "private": true,
+  "scripts": {
+    "prepare": "husky install",
+    "lint": "echo 'Linting not yet configured'",
+    "test": "echo 'Testing handled by individual projects'",
+    "build": "echo 'Building handled by individual projects'"
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx,json,md}": [
+      "echo 'Pre-commit checks would run here'"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6"
+  }
+}

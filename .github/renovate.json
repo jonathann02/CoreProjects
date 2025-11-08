@@ -1,0 +1,66 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticPrefixFixDepsChoreOthers",
+    "group:monorepos",
+    "group:recommended",
+    ":enableVulnerabilityAlertsWithLabel(security)"
+  ],
+  "schedule": ["before 4am on Monday"],
+  "timezone": "Europe/Stockholm",
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Group Java Spring Boot updates",
+      "matchPackagePrefixes": ["org.springframework"],
+      "groupName": "Spring Boot",
+      "schedule": ["before 4am on first day of month"]
+    },
+    {
+      "description": "Group .NET packages",
+      "matchPackagePrefixes": ["Microsoft.", "System."],
+      "groupName": ".NET Core",
+      "schedule": ["before 4am on first day of month"]
+    },
+    {
+      "description": "Group Node.js packages",
+      "matchPackagePrefixes": ["@types/", "typescript", "eslint"],
+      "groupName": "Node.js tooling"
+    },
+    {
+      "description": "Group Go packages",
+      "matchLanguages": ["go"],
+      "groupName": "Go modules"
+    },
+    {
+      "description": "Group Java packages",
+      "matchLanguages": ["java"],
+      "groupName": "Java Maven"
+    },
+    {
+      "description": "Automerge patch updates",
+      "matchUpdateTypes": ["patch"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": true
+    },
+    {
+      "description": "Security updates - high priority",
+      "matchDatasources": ["npm", "maven", "nuget", "go"],
+      "matchUpdateTypes": ["patch"],
+      "matchPackagePatterns": [".*"],
+      "schedule": ["at any time"],
+      "labels": ["security", "dependencies"],
+      "automerge": true
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 4am on Monday"]
+  }
+}

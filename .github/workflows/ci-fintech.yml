@@ -1,0 +1,281 @@
+name: CI - FinTech Platform
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'apps/fintech/**'
+      - 'services/fintech/**'
+      - 'packages/**'
+      - 'deploy/fintech/**'
+      - 'infra/fintech/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'apps/fintech/**'
+      - 'services/fintech/**'
+      - 'packages/**'
+      - 'deploy/fintech/**'
+      - 'infra/fintech/**'
+
+jobs:
+  build-and-test-java:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fintech_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Cache Maven packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+
+    - name: Cache Node.js packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: Build Java services
+      run: |
+        cd services/fintech/accounts
+        mvn clean compile -DskipTests
+
+        cd ../payments
+        mvn clean compile -DskipTests
+
+    - name: Test Java services
+      run: |
+        cd services/fintech/accounts
+        mvn test -Dtestcontainers.enabled=true
+
+        cd ../payments
+        mvn test -Dtestcontainers.enabled=true
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        POSTGRES_DB: fintech_test
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+        REDIS_HOST: localhost
+        REDIS_PORT: 6379
+
+    - name: Build Node.js gateway
+      run: |
+        cd apps/fintech/gateway
+        npm ci
+        npm run build
+
+    - name: Test Node.js gateway
+      run: |
+        cd apps/fintech/gateway
+        npm test
+
+  build-and-test-go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fintech_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Build Go services
+      run: |
+        cd services/fintech/limits
+        go build -v ./...
+
+        cd ../notifications
+        go build -v ./...
+
+    - name: Test Go services
+      run: |
+        cd services/fintech/limits
+        go test -v ./...
+
+        cd ../notifications
+        go test -v ./...
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        POSTGRES_DB: fintech_test
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: java,kotlin,javascript,go
+
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Build all services
+      run: |
+        # Java services
+        cd services/fintech/accounts && mvn compile -DskipTests -q
+        cd ../payments && mvn compile -DskipTests -q
+
+        # Go services
+        cd ../limits && go build -v ./...
+        cd ../notifications && go build -v ./...
+
+        # Node.js gateway
+        cd ../../../apps/fintech/gateway && npm ci && npm run build
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+  container-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codecov/codecov-action@v4
+      if: always()
+      with:
+        file: ./trivy-results.sarif
+        flags: security-scan
+        name: trivy-scan
+
+  generate-sbom:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Syft
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+    - name: Generate SBOM
+      run: |
+        syft packages . --output spdx-json=sbom.json
+
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom
+        path: sbom.json
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Playwright
+      run: |
+        cd apps/fintech/gateway
+        npm ci
+        npx playwright install
+
+    - name: Run E2E tests
+      run: |
+        cd apps/fintech/gateway
+        npm run test:e2e
+      env:
+        CI: true

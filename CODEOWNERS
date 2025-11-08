@@ -1,0 +1,22 @@
+# Global owners
+* @jonathann02
+
+# Catalog Service (.NET)
+/services/catalog-api/ @jonathann02
+/libs/catalog-*/ @jonathann02
+/tests/unit/ @jonathann02
+/tests/integration/ @jonathann02
+/apps/admin-ui/ @jonathann02
+
+# FinTech Platform
+/apps/fintech/ @jonathann02
+/services/fintech/ @jonathann02
+/packages/ @jonathann02
+/deploy/fintech/ @jonathann02
+/infra/fintech/ @jonathann02
+
+# Infrastructure and CI
+/.github/ @jonathann02
+/deploy/ @jonathann02
+/infra/ @jonathann02
+Directory.Build.* @jonathann02
