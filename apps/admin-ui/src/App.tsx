@@ -1,21 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from './services/api'
-import { ProductDto, PagedResult } from './types/api'
+import type { ProductDto, PagedResult } from './types/api'
+import { useAuth } from './hooks'
+import { AuthProvider } from './contexts'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './App.css'
 
-function App() {
+function AdminPanel() {
   const [products, setProducts] = useState<PagedResult<ProductDto> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<ProductDto | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const { user, logout } = useAuth()
 
-  useEffect(() => {
-    loadProducts()
-  }, [search, page])
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true)
       const result = await api.getProducts(search || undefined, page, 10)
@@ -26,7 +27,11 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [search, page])
+
+  useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
 
   const handleEdit = (product: ProductDto) => {
     setEditingProduct(product)
@@ -59,7 +64,17 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Catalog Admin Panel</h1>
+        <div className="header-left">
+          <h1>Catalog Admin Panel</h1>
+          {user && (
+            <div className="user-info">
+              <span>Welcome, {user.username}</span>
+              <button onClick={logout} className="logout-btn">
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
         <div className="search-bar">
           <input
             type="text"
@@ -249,6 +264,18 @@ function ProductEditForm({ product, onSave, onCancel }: ProductEditFormProps) {
         <button type="button" onClick={onCancel} className="cancel-btn">Cancel</button>
       </div>
     </form>
+  )
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <ProtectedRoute requiredRole="ADMIN">
+          <AdminPanel />
+        </ProtectedRoute>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

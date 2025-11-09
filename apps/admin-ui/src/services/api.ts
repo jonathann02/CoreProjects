@@ -1,4 +1,4 @@
-import {
+import type {
   ProductDto,
   PagedResult,
   CreateProductRequest,
@@ -6,7 +6,12 @@ import {
   ProblemDetails
 } from '../types/api';
 
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+
+// Get auth token from localStorage or context
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('auth_token')
+};
 
 class ApiError extends Error {
   public status: number;
@@ -39,6 +44,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
+const createAuthHeaders = (additionalHeaders?: Record<string, string>): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...additionalHeaders,
+  };
+
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
+};
+
 export const api = {
   // Get products with pagination
   async getProducts(search?: string, page = 1, pageSize = 20): Promise<PagedResult<ProductDto>> {
@@ -51,29 +70,25 @@ export const api = {
       params.append('search', search);
     }
 
-    const response = await fetch(`${API_BASE_URL}/v1/products?${params}`);
+    const response = await fetch(`${API_BASE_URL}/v1/products?${params}`, {
+      headers: createAuthHeaders(),
+    });
     return handleResponse<PagedResult<ProductDto>>(response);
   },
 
   // Get single product
   async getProduct(id: string): Promise<ProductDto> {
-    const response = await fetch(`${API_BASE_URL}/v1/products/${id}`);
+    const response = await fetch(`${API_BASE_URL}/v1/products/${id}`, {
+      headers: createAuthHeaders(),
+    });
     return handleResponse<ProductDto>(response);
   },
 
   // Create product (requires authentication)
-  async createProduct(product: CreateProductRequest, token?: string): Promise<ProductDto> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
+  async createProduct(product: CreateProductRequest): Promise<ProductDto> {
     const response = await fetch(`${API_BASE_URL}/v1/products`, {
       method: 'POST',
-      headers,
+      headers: createAuthHeaders(),
       body: JSON.stringify(product),
     });
 
@@ -81,18 +96,10 @@ export const api = {
   },
 
   // Update product (requires authentication)
-  async updateProduct(id: string, product: UpdateProductRequest, token?: string): Promise<ProductDto> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
+  async updateProduct(id: string, product: UpdateProductRequest): Promise<ProductDto> {
     const response = await fetch(`${API_BASE_URL}/v1/products/${id}`, {
       method: 'PUT',
-      headers,
+      headers: createAuthHeaders(),
       body: JSON.stringify(product),
     });
 
@@ -100,16 +107,10 @@ export const api = {
   },
 
   // Delete product (requires authentication)
-  async deleteProduct(id: string, token?: string): Promise<void> {
-    const headers: Record<string, string> = {};
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
+  async deleteProduct(id: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/v1/products/${id}`, {
       method: 'DELETE',
-      headers,
+      headers: createAuthHeaders(),
     });
 
     if (!response.ok) {

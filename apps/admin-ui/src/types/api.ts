@@ -45,5 +45,5 @@ export interface ProblemDetails {
   status?: number;
   detail?: string;
   instance?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }

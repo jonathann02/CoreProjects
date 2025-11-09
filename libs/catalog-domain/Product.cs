@@ -41,6 +41,25 @@ public class Product : IEquatable<Product>
         return new Product(Guid.NewGuid(), sku, name, description, price, currency, stockQty);
     }
 
+    public static Product FromExisting(Guid id, string sku, string name, string description, decimal price, string currency, int stockQty, bool isActive, DateTime createdAt, DateTime updatedAt)
+    {
+        // For existing entities, we trust the data from the database
+        // and don't re-validate to avoid issues with legacy data
+        return new Product
+        {
+            Id = id,
+            Sku = sku,
+            Name = name,
+            Description = description,
+            Price = price,
+            Currency = currency,
+            StockQty = stockQty,
+            IsActive = isActive,
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt
+        };
+    }
+
     public void Update(string name, string description, decimal price, string currency, int stockQty)
     {
         ValidateName(name);

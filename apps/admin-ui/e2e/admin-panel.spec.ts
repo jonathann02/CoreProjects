@@ -4,6 +4,17 @@ test.describe('Catalog Admin Panel', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the admin panel
     await page.goto('http://localhost:5173'); // Vite dev server default port
+
+    // Mock authentication for testing
+    await page.addInitScript(() => {
+      localStorage.setItem('auth_token', 'mock-jwt-token');
+      localStorage.setItem('auth_user', JSON.stringify({
+        id: 'test-user-id',
+        username: 'testadmin',
+        email: 'admin@example.com',
+        roles: ['ADMIN']
+      }));
+    });
   });
 
   test('should load the admin panel', async ({ page }) => {

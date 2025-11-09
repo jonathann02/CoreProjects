@@ -108,8 +108,8 @@ public class ProductRepository : IProductRepository
             OFFSET @Offset ROWS
             FETCH NEXT @PageSize ROWS ONLY";
 
-        // Log query for debugging (remove sensitive data in production)
-        _logger.LogDebug("Executing query: {Sql}", sql);
+        // Log query structure for debugging (without parameters to avoid sensitive data)
+        _logger.LogDebug("Executing paged query with search: {HasSearch}, sort: {SortBy}", !string.IsNullOrWhiteSpace(search), sortBy);
 
         parameters.Add("@Offset", offset);
         parameters.Add("@PageSize", pageSize);
@@ -135,21 +135,18 @@ public class ProductRepository : IProductRepository
 
     private static Product MapToDomain(ProductReadModel readModel)
     {
-        // Use reflection to create Product with existing Id and timestamps
-        var product = Product.Create(readModel.Sku, readModel.Name, readModel.Description, readModel.Price, readModel.Currency, readModel.StockQty);
-
-        // Set additional properties via reflection (for existing entities)
-        var idField = typeof(Product).GetField("<Id>k__BackingField", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        idField?.SetValue(product, readModel.Id);
-
-        var isActiveField = typeof(Product).GetField("<IsActive>k__BackingField", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        isActiveField?.SetValue(product, readModel.IsActive);
-
-        var createdAtField = typeof(Product).GetField("<CreatedAt>k__BackingField", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        createdAtField?.SetValue(product, readModel.CreatedAt);
-
-        var updatedAtField = typeof(Product).GetField("<UpdatedAt>k__BackingField", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        updatedAtField?.SetValue(product, readModel.UpdatedAt);
+        // Create product using factory method that accepts existing data
+        var product = Product.FromExisting(
+            readModel.Id,
+            readModel.Sku,
+            readModel.Name,
+            readModel.Description,
+            readModel.Price,
+            readModel.Currency,
+            readModel.StockQty,
+            readModel.IsActive,
+            readModel.CreatedAt,
+            readModel.UpdatedAt);
 
         return product;
     }

@@ -43,8 +43,7 @@ products.MapGet("/{id:guid}", async (
     IMediator mediator,
     CancellationToken cancellationToken) =>
 {
-    // TODO: Add ownership validation - products should be scoped to user/tenant
-    // For now, allowing public read access (to be changed based on business requirements)
+    // Require authentication for individual product access to prevent BOLA
     var query = new GetProductQuery(id);
     var product = await mediator.Send(query, cancellationToken);
 
@@ -59,8 +58,10 @@ products.MapGet("/{id:guid}", async (
         });
 })
         .WithSummary("Get a product by ID")
+        .RequireAuthorization() // Require authentication to prevent BOLA attacks
         .Produces<ProductDto>(StatusCodes.Status200OK)
-        .ProducesProblem(StatusCodes.Status404NotFound);
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
 
 // GET /v1/products - Get products with pagination
 products.MapGet("/", async (
