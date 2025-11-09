@@ -1,0 +1,22 @@
+name,email,phone,address,organizationName
+John Smith,john.smith@example.com,+1-555-0123,123 Main St, Anytown, USA,Tech Corp
+Jane Doe,jane.doe@example.com,+1-555-0456,456 Oak Ave, Somewhere, USA,Data Inc
+Johnny Smith,j.smith@work.com,+1-555-0123,123 Main Street, Anytown, USA,Tech Corp
+J. Smith,johnny.smith@email.com,,124 Main St, Anytown, USA,Tech Corporation
+Jane D.,jane.doe@data.com,+1-555-0456,456 Oak Avenue, Somewhere, USA,Data Inc
+Bob Johnson,bob.johnson@company.com,+1-555-0789,789 Pine Rd, Elsewhere, USA,Finance LLC
+Robert Johnson,bob.j@company.com,+1-555-0789,789 Pine Road, Elsewhere, USA,Finance LLC
+Alice Wilson,alice.wilson@startup.com,+1-555-0321,321 Elm St, Newtown, USA,Startup Co
+Alicia Wilson,alice.w@startup.com,,321 Elm Street, Newtown, USA,Startup Company
+Charlie Brown,charlie.brown@school.edu,+1-555-0654,654 Birch Ln, Oldtown, USA,Education Dept
+Charles Brown,charlie.brown@edu.edu,+1-555-0654,654 Birch Lane, Oldtown, USA,Education Department
+Diana Prince,diana.prince@hero.com,+1-555-0987,987 Cedar St, Metropolis, USA,Hero Foundation
+Diana Prince,d.prince@hero.com,+1-555-0987,987 Cedar Street, Metropolis, USA,Hero Foundation
+Eve Adams,eve.adams@agency.com,+1-555-0432,432 Maple Dr, Cityville, USA,Marketing Agency
+Eve A.,evea@agency.com,+1-555-0432,432 Maple Drive, Cityville, USA,Marketing Agency
+Frank Miller,frank.miller@studio.com,+1-555-0765,765 Walnut Ave, Artcity, USA,Design Studio
+F. Miller,frank.m@studio.com,+1-555-0765,765 Walnut Avenue, Artcity, USA,Design Studio
+Grace Lee,grace.lee@university.edu,+1-555-0210,210 Spruce St, College Town, USA,University
+Grace Lee,glee@university.edu,+1-555-0210,210 Spruce Street, College Town, USA,University
+Henry Ford,henry.ford@auto.com,+1-555-0543,543 Cherry Ln, Motown, USA,Auto Company
+H. Ford,henry.f@auto.com,+1-555-0543,543 Cherry Lane, Motown, USA,Auto Company

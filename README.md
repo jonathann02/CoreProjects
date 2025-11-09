@@ -1,218 +1,336 @@
-# Catalog Suite
+# Graph & Entity Resolution Lab
 
-A production-grade catalog service built with .NET 8, Minimal APIs, and DDD/CQRS patterns. Implements enterprise security standards and observability best practices.
+A comprehensive platform for entity resolution, deduplication, and graph-based data analysis built with modern web technologies and graph databases.
 
-## Architecture
+## 🚀 Features
 
-- **Domain Layer** (`libs/catalog-domain`): Core business logic, entities, and invariants
-- **Application Layer** (`libs/catalog-application`): Use cases, commands, queries, and DTOs
-- **Infrastructure Layer** (`libs/catalog-infrastructure`): EF Core, repositories, migrations
-- **API Layer** (`services/catalog-api`): Minimal API endpoints with security and observability
+- **CSV Upload & Processing**: Streamlined upload with real-time validation and schema preview
+- **Entity Resolution**: Advanced deduplication using fuzzy matching and similarity algorithms
+- **Graph Visualization**: Interactive Cytoscape.js graphs for exploring entity relationships
+- **REST & GraphQL APIs**: Dual API approach for maximum flexibility
+- **Observability**: OpenTelemetry tracing, Prometheus metrics, and Grafana dashboards
+- **Security First**: Input validation, rate limiting, CORS, and comprehensive security headers
+- **Type Safety**: Full TypeScript coverage with strict type checking
+- **Testing**: Unit, integration, and E2E tests with comprehensive coverage
 
-## Features
+## 🏗️ Architecture
 
-- ✅ RESTful Product management API (CRUD operations)
-- ✅ JWT Bearer authentication with role-based authorization
-- ✅ Rate limiting (100 req/min per IP, 1000 req/hour)
-- ✅ OpenTelemetry tracing, metrics, and logs (OTLP to Jaeger)
-- ✅ Health checks (liveness/readiness)
-- ✅ Comprehensive testing (unit + integration with Testcontainers)
-- ✅ Security hardening (OWASP ASVS L1, API Security Top 10)
-- ✅ CI/CD with GitHub Actions (build, test, coverage, CodeQL)
-- ✅ Docker Compose for local development
-
-## API Endpoints
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/v1/products` | Create product | ✅ `products:write` |
-| GET | `/v1/products/{id}` | Get product by ID | ❌ |
-| GET | `/v1/products` | List products (paginated) | ❌ |
-| PUT | `/v1/products/{id}` | Update product | ✅ `products:write` |
-| DELETE | `/v1/products/{id}` | Soft delete product | ✅ `products:write` |
-| GET | `/health/live` | Liveness check | ❌ |
-| GET | `/health/ready` | Readiness check | ❌ |
-
-### Request/Response Examples
-
-#### Create Product
-```bash
-POST /v1/products
-Content-Type: application/json
-Authorization: Bearer {jwt-token}
-
-{
-  "sku": "PROD001",
-  "name": "Wireless Headphones",
-  "description": "High-quality wireless headphones with noise cancellation",
-  "price": 199.99,
-  "currency": "USD",
-  "stockQty": 50
-}
+```
+├── apps/
+│   ├── graph-er-api/          # Node.js/Express API with GraphQL
+│   └── graph-er-web/          # React/Vite frontend with Cytoscape.js
+├── packages/
+│   └── shared/                # Shared types, schemas, and utilities
+├── infra/
+│   └── graph-er/              # Docker Compose with Neo4j + Observability
+└── fixtures/                  # Sample CSV files for testing
 ```
 
-#### List Products
-```bash
-GET /v1/products?page=1&pageSize=20&search=headphones&sortBy=name&sortOrder=asc
-```
+## 🛠️ Technology Stack
 
-## Getting Started
+### Backend
+- **Runtime**: Node.js with TypeScript
+- **Framework**: Express.js with Apollo GraphQL
+- **Database**: Neo4j with APOC and Graph Data Science
+- **Validation**: Zod schemas
+- **Streaming**: CSV parsing with streaming ETL pipeline
+- **Observability**: OpenTelemetry, Pino logging
+
+### Frontend
+- **Framework**: React 19 with TypeScript
+- **Build Tool**: Vite
+- **Routing**: React Router
+- **State Management**: TanStack Query
+- **Visualization**: Cytoscape.js with multiple layout algorithms
+- **Styling**: Tailwind CSS
+
+### Infrastructure
+- **Containerization**: Docker & Docker Compose
+- **Database**: Neo4j 5.24 with plugins
+- **Monitoring**: Prometheus + Grafana
+- **Tracing**: OpenTelemetry Collector
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- .NET 8.0 SDK
-- Docker and Docker Compose
-- SQL Server (local or containerized)
+- Docker & Docker Compose
+- Node.js 20+
+- npm or pnpm
 
-### Local Development
+### 1. Clone and Install
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd catalog-suite
-   ```
-
-2. **Start the local stack**
-   ```bash
-   cd deploy/docker
-   docker compose up -d
-   ```
-
-3. **Verify the stack is running**
-   - API: http://localhost:8080
-   - Swagger UI: http://localhost:8080/swagger
-   - Jaeger UI: http://localhost:16686
-   - Health checks: http://localhost:8080/health/live
-
-4. **Run tests**
-   ```bash
-   dotnet test
-   ```
-
-### Configuration
-
-#### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ASPNETCORE_ENVIRONMENT` | Environment (Development/Staging/Production) | Development |
-| `ConnectionStrings__CatalogDatabase` | SQL Server connection string | Required |
-| `Auth__Authority` | JWT issuer URL | Required |
-| `Auth__Audience` | JWT audience | Required |
-| `IpRateLimiting__EnableEndpointRateLimiting` | Enable rate limiting | true |
-
-#### Development Configuration
-
-For local development with Docker Compose:
 ```bash
-# API Configuration
-ASPNETCORE_ENVIRONMENT=Development
-ConnectionStrings__CatalogDatabase=Server=sqledge;Database=CatalogDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;
-Auth__Authority=https://localhost:5001
-Auth__Audience=catalog-api
-
-# Rate Limiting
-IpRateLimiting__EnableEndpointRateLimiting=true
-IpRateLimiting__GeneralRules__0__Endpoint=*
-IpRateLimiting__GeneralRules__0__Period=1m
-IpRateLimiting__GeneralRules__0__Limit=100
+git clone <repository-url>
+cd CoreProjects
+npm install
 ```
 
-## Security
+### 2. Start Infrastructure
 
-This project implements comprehensive security controls based on:
+```bash
+# Start Neo4j, OTEL Collector, Prometheus, and Grafana
+npm run docker:up
+```
 
-- **OWASP Application Security Verification Standard (ASVS) 5.0** (Level 1)
-- **OWASP API Security Top 10 (2023)**
-- **NIST Secure Software Development Framework (SSDF)**
-- **MITRE CWE Top 25**
+**Service Endpoints:**
+- Neo4j Browser: http://localhost:7474 (neo4j/grapher123)
+- Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+
+### 3. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+### 4. Start Development Servers
+
+```bash
+# Terminal 1: Start API
+cd apps/graph-er-api && npm run dev
+
+# Terminal 2: Start Web App
+cd apps/graph-er-web && npm run dev
+```
+
+**Access the application:**
+- Web UI: http://localhost:3001
+- GraphQL API: http://localhost:4000/graphql
+- Health Check: http://localhost:4000/healthz
+
+## 📊 Usage
+
+### Upload Data
+
+1. Navigate to the Upload page
+2. Drag & drop a CSV file or click to browse
+3. Preview the data and validate schema
+4. Upload and process the batch
+
+### Explore Results
+
+1. **Batches Page**: View upload history and processing status
+2. **Clusters Page**: Interactive graph visualization of entity relationships
+3. **Records Page**: Detailed view of individual golden records
+
+### CSV Format
+
+```csv
+name,email,phone,address,organizationName
+John Smith,john@example.com,+1-555-0123,123 Main St,Tech Corp
+Jane Doe,jane@example.com,+1-555-0456,456 Oak Ave,Data Inc
+```
+
+**Required columns:** `name`, `email` (case-insensitive)
+
+## 🔧 Development
+
+### Available Scripts
+
+```bash
+# Root level
+npm run lint              # Lint all workspaces
+npm run typecheck         # Type check all workspaces
+npm run test              # Run all tests
+npm run build             # Build all workspaces
+npm run docker:up         # Start infrastructure
+npm run docker:down       # Stop infrastructure
+
+# API specific
+cd apps/graph-er-api
+npm run dev               # Start development server
+npm run test:unit         # Unit tests
+npm run test:int          # Integration tests
+
+# Web specific
+cd apps/graph-er-web
+npm run dev               # Start development server
+npm run test:e2e          # E2E tests with Playwright
+
+# Shared package
+cd packages/shared
+npm run test              # Unit tests
+npm run build             # Build package
+```
+
+### Testing
+
+```bash
+# Run all tests
+npm run test
+
+# Run E2E tests (requires running app)
+npm run test:e2e
+
+# Run with coverage
+npm run test -- --coverage
+```
+
+## 🔒 Security
+
+### Threat Model
+
+**Data Protection:**
+- All PII is validated and normalized before storage
+- No sensitive data logged in application logs
+- Database queries use parameterized statements
+- File uploads are validated and sanitized
+
+**Access Control:**
+- CORS configured for specific origins only
+- Rate limiting on all endpoints (except health checks)
+- Input validation with Zod schemas
+- GraphQL query complexity limits
+
+**Infrastructure Security:**
+- Containerized deployment with minimal attack surface
+- Neo4j constraints prevent data corruption
+- OpenTelemetry provides observability without exposing internals
 
 ### Security Features
 
-- **Authentication**: JWT Bearer tokens with configurable issuer/audience
-- **Authorization**: Policy-based access control (`products:write` policy)
-- **Input Validation**: Server-side validation with RFC 7807 ProblemDetails
-- **Rate Limiting**: IP-based rate limiting to prevent abuse
-- **HTTPS**: TLS 1.2+ required in production
-- **Security Headers**: X-Content-Type-Options, X-Frame-Options, HSTS
-- **Data Protection**: RowVersion for optimistic concurrency
-- **Logging**: Structured logging without sensitive data
-- **CORS**: Restrictive CORS policy (localhost only in development)
+- ✅ HTTP Security Headers (Helmet)
+- ✅ Input Sanitization & Validation
+- ✅ Rate Limiting (express-rate-limit)
+- ✅ CORS Protection
+- ✅ GraphQL Security (depth/complexity limits)
+- ✅ Parameterized Database Queries
+- ✅ Safe Error Messages (no stack traces in production)
+- ✅ File Upload Validation (type, size, content)
 
-See [SECURITY.md](SECURITY.md) for detailed security analysis.
+## 📈 Monitoring & Observability
 
-## Testing
+### Metrics
+- Application performance metrics via Prometheus
+- Neo4j database metrics
+- HTTP request/response metrics
+- ETL processing statistics
+
+### Tracing
+- OpenTelemetry distributed tracing
+- Request lifecycle tracing
+- Database query tracing
+- GraphQL resolver tracing
+
+### Logging
+- Structured logging with Pino
+- Request ID correlation
+- Configurable log levels
+- PII-safe logging (redacts sensitive data)
+
+### Dashboards
+- Pre-configured Grafana dashboards
+- Real-time metrics visualization
+- ETL processing monitoring
+- System health overview
+
+## 🧪 Testing Strategy
 
 ### Unit Tests
-```bash
-dotnet test tests/unit/Catalog.UnitTests.csproj
-```
+- Pure function testing (normalization, validation)
+- Component testing with React Testing Library
+- Utility function coverage
 
 ### Integration Tests
+- Neo4j database constraints and queries
+- ETL pipeline end-to-end testing
+- API endpoint testing with Testcontainers
+
+### E2E Tests
+- Playwright-based browser automation
+- Complete user workflows (upload → process → review)
+- Cross-browser compatibility testing
+
+### Security Tests
+- Input validation edge cases
+- Rate limiting verification
+- File upload security
+- GraphQL query security
+
+## 🚢 Production Deployment
+
+### Docker Deployment
+
 ```bash
-dotnet test tests/integration/Catalog.IntegrationTests.csproj
+# Build and run with Docker Compose
+docker-compose -f infra/graph-er/docker-compose.yml up -d
+
+# Scale services as needed
+docker-compose up -d --scale graph-er-api=3
 ```
 
-Integration tests use Testcontainers to spin up SQL Server containers for isolated testing.
-
-## Deployment
-
-### Docker Compose (Development)
+### Environment Configuration
 
 ```bash
-cd deploy/docker
-docker compose up -d
+# Production environment variables
+NODE_ENV=production
+NEO4J_PASSWORD=your-secure-password
+ALLOWED_ORIGINS=https://yourdomain.com
+OTEL_EXPORTER_OTLP_ENDPOINT=https://your-otel-endpoint.com
 ```
 
-### Production Considerations
+### Health Checks & Monitoring
 
-- Use managed SQL Server/Azure SQL Database
-- Configure proper JWT issuer (Auth0, Azure AD, etc.)
-- Set up proper CORS origins
-- Enable HSTS and security headers
-- Configure log aggregation (ELK stack, Azure Monitor, etc.)
-- Set up monitoring and alerting
-- Use Azure Key Vault or similar for secrets management
+- Kubernetes readiness/liveness probes
+- External monitoring integration
+- Log aggregation setup
+- Backup and disaster recovery
 
-## Monitoring & Observability
-
-### OpenTelemetry
-- **Traces**: ASP.NET Core requests, EF Core database calls
-- **Metrics**: HTTP request metrics, system metrics
-- **Logs**: Structured logging with OTLP export
-
-### Health Checks
-- **Liveness**: Process health (`/health/live`)
-- **Readiness**: Database connectivity (`/health/ready`)
-
-### Jaeger Integration
-View traces at http://localhost:16686 when running Docker Compose.
-
-## CI/CD
-
-GitHub Actions workflows provide:
-
-- **Build & Test**: Automated build, unit tests, integration tests
-- **Code Coverage**: Codecov integration
-- **Security Scanning**: CodeQL analysis
-- **Dependency Updates**: Dependabot for NuGet, GitHub Actions, Docker
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Write tests for new functionality
+3. Make changes with tests
 4. Ensure all tests pass
 5. Submit a pull request
 
-### Code Standards
+### Code Quality
 
-- Follow C# coding conventions
-- Use nullable reference types
-- Write comprehensive unit tests
-- Follow SOLID principles and DDD patterns
-- Security-first approach to all features
+- ESLint + Prettier enforced
+- TypeScript strict mode
+- 100% test coverage target
+- Conventional commits required
 
-## License
+## 📚 API Documentation
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### REST Endpoints
+
+- `GET /healthz` - Health check
+- `GET /readyz` - Readiness check
+- `GET /metrics` - Prometheus metrics
+- `POST /v1/upload/start` - Start file upload
+- `POST /v1/upload/:sessionId/chunk` - Upload file chunk
+- `POST /v1/upload/:sessionId/commit` - Process uploaded file
+
+### GraphQL Schema
+
+```graphql
+type Query {
+  goldenRecords(pagination: PaginationInput, search: SearchInput): GoldenRecordsResult!
+  matchClusters(pagination: PaginationInput, status: ClusterStatus): MatchClustersResult!
+  batches(pagination: PaginationInput, status: BatchStatus): BatchesResult!
+}
+
+type Mutation {
+  acceptMerge(clusterId: ID!, chosenRecordId: ID): Boolean!
+  splitRecord(recordId: ID!): Boolean!
+  reindexBatch(batchId: ID!): Boolean!
+}
+```
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- Neo4j for the graph database
+- Cytoscape.js for graph visualization
+- OpenTelemetry for observability
+- The open source community
+
+---
+
+**Built with ❤️ for entity resolution and data quality excellence**

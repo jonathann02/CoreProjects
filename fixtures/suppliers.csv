@@ -1,0 +1,17 @@
+name,email,phone,address,organizationName,organizationId
+Global Supply Co,contact@globalsupply.com,+1-800-123-4567,100 Industrial Blvd, Industry City, USA,GS123456
+Global Supply Company,info@globalsupply.com,+1-800-123-4567,100 Industrial Boulevard, Industry City, USA,GS123456
+Tech Solutions Inc,support@techsolutions.com,+1-888-234-5678,200 Technology Dr, Silicon Valley, USA,TS789012
+Tech Solutions Incorporated,sales@techsolutions.com,+1-888-234-5678,200 Technology Drive, Silicon Valley, USA,TS789012
+Manufacturing Partners,orders@manufacturing.com,+1-877-345-6789,300 Factory Rd, Factory Town, USA,MP345678
+Manufacturing Partners LLC,contact@manufacturing.com,+1-877-345-6789,300 Factory Road, Factory Town, USA,MP345678
+Quality Components,qc@qualitycomponents.com,+1-866-456-7890,400 Quality St, Precision City, USA,QC901234
+Quality Components Ltd,info@qualitycomponents.com,+1-866-456-7890,400 Quality Street, Precision City, USA,QC901234
+Reliable Logistics,reliable@logistics.com,+1-855-567-8901,500 Distribution Ave, Logistics Hub, USA,RL567890
+Reliable Logistics Corp,support@logistics.com,+1-855-567-8901,500 Distribution Avenue, Logistics Hub, USA,RL567890
+Advanced Materials,materials@advanced.com,+1-844-678-9012,600 Research Blvd, Research Park, USA,AM123789
+Advanced Materials Inc,sales@advanced.com,+1-844-678-9012,600 Research Boulevard, Research Park, USA,AM123789
+Professional Services,pro@services.com,+1-833-789-0123,700 Business Center, Business District, USA,PS456123
+Professional Services Group,contact@services.com,+1-833-789-0123,700 Business Center, Business District, USA,PS456123
+Green Energy Solutions,green@energy.com,+1-822-890-1234,800 Sustainable Way, Eco City, USA,GE789456
+Green Energy Solutions LLC,info@energy.com,+1-822-890-1234,800 Sustainable Way, Eco City, USA,GE789456

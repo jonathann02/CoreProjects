@@ -1,0 +1,17 @@
+name,email,phone,address,organizationName
+John Smith,john.smith@example.com,+1-555-0123,123 Main St, Anytown, USA,Acme Corp
+Jane Smith,jane.smith@example.com,+1-555-0456,456 Oak Ave, Somewhere, USA,Tech Startup
+John Doe,j.doe@company.com,+1-555-0789,789 Pine Rd, Elsewhere, USA,Big Enterprise
+Jane Doe,jane.doe@startup.com,+1-555-0321,321 Elm St, Newtown, USA,Tech Startup
+Bob Wilson,b.wilson@agency.com,+1-555-0654,654 Birch Ln, Oldtown, USA,Marketing Agency
+Robert Wilson,bob.wilson@agency.com,+1-555-0987,987 Cedar St, Metropolis, USA,Marketing Agency
+Alice Johnson,a.johnson@university.edu,+1-555-0432,432 Maple Dr, Cityville, USA,State University
+Alicia Johnson,alice.j@university.edu,+1-555-0765,765 Walnut Ave, Artcity, USA,State University
+Charlie Brown,charlie.brown@school.edu,+1-555-0210,210 Spruce St, College Town, USA,Public School
+Charles Brown,c.brown@school.edu,+1-555-0543,543 Cherry Ln, Motown, USA,Public School
+Diana Davis,diana.davis@hospital.com,+1-555-0876,876 Willow Rd, Health City, USA,Medical Center
+Diana Davis,d.davis@hospital.com,+1-555-0309,309 Poplar Ave, Health City, USA,Medical Center
+Edward Taylor,e.taylor@lawfirm.com,+1-555-0632,632 Ash St, Legal Town, USA,Law Partners
+Edward Taylor,ed.taylor@lawfirm.com,+1-555-0965,965 Hickory Ln, Legal Town, USA,Law Partners
+Fiona Garcia,f.garcia@restaurant.com,+1-555-0298,298 Bamboo Rd, Food City, USA,Garcia Family Restaurant
+Fiona Garcia,fiona.g@restaurant.com,+1-555-0521,521 Palm St, Food City, USA,Garcia Family Restaurant

@@ -1,0 +1,52 @@
+{
+  "name": "graph-er-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "@graph-er/shared": "file:../../packages/shared",
+    "@tanstack/react-query": "^5.62.3",
+    "@tanstack/react-query-devtools": "^5.62.3",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "cytoscape": "^3.30.2",
+    "cytoscape-cola": "^2.5.1",
+    "cytoscape-cose-bilkent": "^4.1.0",
+    "cytoscape-dagre": "^2.5.0",
+    "cytoscape-fcose": "^2.2.0",
+    "lucide-react": "^0.451.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/cytoscape": "^3.21.7",
+    "@types/cytoscape-cola": "^2.3.4",
+    "@types/cytoscape-cose-bilkent": "^4.1.3",
+    "@types/cytoscape-dagre": "^2.3.4",
+    "@types/cytoscape-fcose": "^2.2.3",
+    "@types/node": "^24.6.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "@vitest/ui": "^2.1.4",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^25.0.1",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7",
+    "vitest": "^2.1.4"
+  }
+}

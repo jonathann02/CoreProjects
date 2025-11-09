@@ -1,0 +1,11 @@
+name,email,phone,address,organizationName
+Dr. John Smith,john.smith@medcorp.com,555-0123,123 Medical Center,Medical Corp
+JOHN SMITH,john.smith@MEDCORP.COM,(555) 012-3456,123 Medical Center,MedCorp
+Jane Doe,jane.doe@example.com,555.0456.7890,456 Oak Avenue,Data Inc
+JANE DOE,jane.doe@example.com,555-0456-7890,456 Oak Ave,DATA INC
+José María González,jose.gonzalez@empresa.com,+52-55-1234-5678,Calle Principal 123,Empresa SA
+Jose Gonzalez,jose.gonzalez@empresa.com,52-55-1234-5678,Calle Principal 123,Empresa S.A.
+Bob "Bobby" Johnson,bobby.j@example.com,1-555-0789-0123,789 Pine Road,Analytics LLC
+Robert Johnson,bob.johnson@analytics-llc.com,555-0789-0123,789 Pine Rd,Analytics LLC
+Sarah Connor,sarah.connor@skynet.com,555-0666-1234,456 Future St,Skynet Corp
+Sarah O'Connor,sarah.oconnor@skynet.com,555-0666-1234,456 Future Street,Skynet Corporation
