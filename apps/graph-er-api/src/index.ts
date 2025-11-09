@@ -9,7 +9,11 @@ import { register, collectDefaultMetrics } from 'prom-client';
 import { createHealthRoutes } from './routes/health.js';
 import { createUploadRoutes } from './routes/upload.js';
 import { initializeNeo4j } from './database/neo4j.js';
+import { initializeTracing } from './observability/tracing.js';
 import { logger } from './utils/logger.js';
+
+// Initialize OpenTelemetry tracing
+initializeTracing();
 
 // Initialize Neo4j connection and constraints
 let neo4jDriver: any;
