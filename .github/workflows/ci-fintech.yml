@@ -178,7 +178,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: java,kotlin,javascript,go
 
@@ -212,7 +212,7 @@ jobs:
         cd ../../../apps/fintech/gateway && npm ci && npm run build
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
 
   container-scan:
     runs-on: ubuntu-latest
