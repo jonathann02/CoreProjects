@@ -13,10 +13,15 @@ import {
   normalizeAddress,
   createNaturalKey,
   calculateSimilarity,
+  shouldMergeEntities,
+  generateMergeSuggestions,
+  defaultEntityResolutionConfig,
+  type EntityResolutionConfig,
 } from '@graph-er/shared';
 
 import { executeQuery } from '../database/neo4j.js';
 import { logger } from '../utils/logger.js';
+import { etlAuditService } from './audit.js';
 
 export interface ETLResult {
   batchId: string;
@@ -58,8 +63,21 @@ export async function processETLBatch(
     errors: [],
   };
 
+  // Calculate input hash for audit trail
+  let inputHash = '';
+  try {
+    const fs = await import('fs/promises');
+    const content = await fs.readFile(filePath, 'utf-8');
+    inputHash = etlAuditService.calculateInputHash(content);
+  } catch (error) {
+    logger.warn('Could not calculate input hash', { error, batchId });
+  }
+
   try {
     logger.info('Starting ETL pipeline', { batchId, filePath });
+
+    // Audit: Start ETL operation
+    await etlAuditService.logETLOperation(batchId, 'START', inputHash, { filePath });
 
     // Stage 1: Read and validate CSV
     onProgress?.({ stage: 'reading', processed: 0, total: 100, message: 'Reading CSV file' });
@@ -67,35 +85,120 @@ export async function processETLBatch(
     result.totalRecords = records.length;
 
     // Stage 2: Validate and normalize
+    const validationStart = Date.now();
     onProgress?.({ stage: 'validating', processed: 0, total: records.length, message: 'Validating records' });
     const { validRecords, invalidRecords } = await validateRecords(records, result);
     result.validRecords = validRecords.length;
     result.invalidRecords = invalidRecords.length;
 
+    // Audit: Validation complete
+    await etlAuditService.logETLOperation(
+      batchId,
+      'VALIDATION_COMPLETE',
+      inputHash,
+      {
+        totalRecords: result.totalRecords,
+        validRecords: result.validRecords,
+        invalidRecords: result.invalidRecords,
+      },
+      Date.now() - validationStart
+    );
+
     // Stage 3: Normalize data
+    const normalizationStart = Date.now();
     onProgress?.({ stage: 'normalizing', processed: 0, total: validRecords.length, message: 'Normalizing data' });
     const normalizedRecords = normalizeRecords(validRecords);
 
+    // Audit: Normalization complete
+    await etlAuditService.logETLOperation(
+      batchId,
+      'NORMALIZATION_COMPLETE',
+      inputHash,
+      { normalizedRecords: normalizedRecords.length },
+      Date.now() - normalizationStart
+    );
+
     // Stage 4: Deduplicate and create match links
+    const deduplicationStart = Date.now();
     onProgress?.({ stage: 'deduplicating', processed: 0, total: normalizedRecords.length, message: 'Finding duplicates' });
-    const { matchLinks, duplicatesFound } = await findDuplicates(normalizedRecords);
+    const { matchLinks, duplicatesFound } = await findDuplicates(normalizedRecords, defaultEntityResolutionConfig);
     result.duplicatesFound = duplicatesFound;
 
+    // Audit: Deduplication complete
+    await etlAuditService.logETLOperation(
+      batchId,
+      'DEDUPLICATION_COMPLETE',
+      inputHash,
+      {
+        duplicatesFound: result.duplicatesFound,
+        matchLinks: matchLinks.length,
+      },
+      Date.now() - deduplicationStart
+    );
+
     // Stage 5: Create clusters
+    const clusteringStart = Date.now();
     onProgress?.({ stage: 'clustering', processed: 0, total: normalizedRecords.length, message: 'Building clusters' });
     const clusters = buildClusters(normalizedRecords, matchLinks);
     result.clustersCreated = clusters.length;
 
+    // Audit: Clustering complete
+    await etlAuditService.logETLOperation(
+      batchId,
+      'CLUSTERING_COMPLETE',
+      inputHash,
+      { clustersCreated: result.clustersCreated },
+      Date.now() - clusteringStart
+    );
+
     // Stage 6: Write to Neo4j
+    const writingStart = Date.now();
     onProgress?.({ stage: 'writing', processed: 0, total: normalizedRecords.length + clusters.length, message: 'Writing to database' });
     await writeToNeo4j(normalizedRecords, matchLinks, clusters, batchId);
     result.goldenRecordsCreated = clusters.length;
 
+    // Audit: Writing complete
+    await etlAuditService.logETLOperation(
+      batchId,
+      'WRITING_COMPLETE',
+      inputHash,
+      { goldenRecordsCreated: result.goldenRecordsCreated },
+      Date.now() - writingStart
+    );
+
     result.processingTimeMs = Date.now() - startTime;
+
+    // Audit: ETL complete
+    await etlAuditService.logETLOperation(
+      batchId,
+      'COMPLETE',
+      inputHash,
+      {
+        totalRecords: result.totalRecords,
+        validRecords: result.validRecords,
+        duplicatesFound: result.duplicatesFound,
+        clustersCreated: result.clustersCreated,
+        goldenRecordsCreated: result.goldenRecordsCreated,
+      },
+      result.processingTimeMs
+    );
+
     logger.info('ETL pipeline completed', result);
 
   } catch (error) {
-    result.errors.push(error instanceof Error ? error.message : String(error));
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    result.errors.push(errorMessage);
+
+    // Audit: ETL failed
+    await etlAuditService.logETLOperation(
+      batchId,
+      'FAILED',
+      inputHash,
+      { stage: 'unknown' },
+      Date.now() - startTime,
+      errorMessage
+    );
+
     logger.error('ETL pipeline failed', { error, batchId });
   }
 
@@ -178,13 +281,16 @@ function normalizeRecords(records: EntityInput[]): EntityInput[] {
 }
 
 /**
- * Find duplicates and create match links
+ * Find duplicates and create match links using configurable entity resolution
  */
-async function findDuplicates(records: EntityInput[]): Promise<{ matchLinks: any[], duplicatesFound: number }> {
+async function findDuplicates(
+  records: EntityInput[],
+  config: EntityResolutionConfig = defaultEntityResolutionConfig
+): Promise<{ matchLinks: any[], duplicatesFound: number }> {
   const matchLinks: any[] = [];
-  const duplicatesFound = 0;
+  const processedPairs = new Set<string>();
 
-  // Group records by natural key (exact matches)
+  // First, find exact matches based on natural keys
   const naturalKeyGroups = new Map<string, EntityInput[]>();
 
   for (const record of records) {
@@ -196,33 +302,87 @@ async function findDuplicates(records: EntityInput[]): Promise<{ matchLinks: any
     naturalKeyGroups.get(naturalKey)!.push(record);
   }
 
-  // Create match links for groups with multiple records
+  // Create exact match links for groups with multiple records
   for (const [naturalKey, group] of naturalKeyGroups.entries()) {
     if (group.length > 1) {
-      // Create links between all pairs in the group
       for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
           const recordA = group[i];
           const recordB = group[j];
+          const pairKey = [recordA.id || `${recordA.batchId}_${i}`, recordB.id || `${recordB.batchId}_${j}`].sort().join('|');
 
-          matchLinks.push({
-            id: crypto.randomUUID(),
-            sourceRecordId: recordA.id || `${recordA.batchId}_${i}`,
-            targetRecordId: recordB.id || `${recordB.batchId}_${j}`,
-            method: 'exact',
-            score: 1.0,
-            metadata: { naturalKey },
-            createdAt: new Date(),
-          });
+          if (!processedPairs.has(pairKey)) {
+            processedPairs.add(pairKey);
+
+            matchLinks.push({
+              id: crypto.randomUUID(),
+              sourceRecordId: recordA.id || `${recordA.batchId}_${i}`,
+              targetRecordId: recordB.id || `${recordB.batchId}_${j}`,
+              method: 'EXACT',
+              score: 1.0,
+              metadata: { naturalKey, reason: 'Exact natural key match' },
+              createdAt: new Date(),
+            });
+          }
         }
       }
     }
   }
 
-  // TODO: Add fuzzy matching for near-duplicates
-  // This would use similarity scoring on names, emails, etc.
+  // Now perform fuzzy matching on all pairs (excluding already matched exact pairs)
+  const maxComparisons = Math.min(records.length * (records.length - 1) / 2, 10000); // Limit to prevent excessive computation
+  let comparisons = 0;
 
-  return { matchLinks, duplicatesFound };
+  for (let i = 0; i < records.length && comparisons < maxComparisons; i++) {
+    for (let j = i + 1; j < records.length && comparisons < maxComparisons; j++) {
+      comparisons++;
+
+      const recordA = records[i];
+      const recordB = records[j];
+      const pairKey = [recordA.id || `${recordA.batchId}_${i}`, recordB.id || `${recordB.batchId}_${j}`].sort().join('|');
+
+      // Skip if already processed as exact match
+      if (processedPairs.has(pairKey)) continue;
+
+      // Check if entities should be merged based on configurable rules
+      const mergeDecision = shouldMergeEntities(recordA, recordB, config);
+
+      if (mergeDecision.shouldMerge) {
+        processedPairs.add(pairKey);
+
+        // Determine the matching method based on which fields matched
+        let method = 'FUZZY_NAME';
+        if (mergeDecision.reason.includes('Exact email match')) {
+          method = 'EXACT';
+        } else if (mergeDecision.reason.includes('Exact organization ID match')) {
+          method = 'EXACT';
+        } else if (mergeDecision.reason.includes('email')) {
+          method = 'FUZZY_EMAIL';
+        } else if (mergeDecision.reason.includes('phone')) {
+          method = 'FUZZY_PHONE';
+        } else if (mergeDecision.reason.includes('organization')) {
+          method = 'FUZZY_ORGANIZATION';
+        }
+
+        matchLinks.push({
+          id: crypto.randomUUID(),
+          sourceRecordId: recordA.id || `${recordA.batchId}_${i}`,
+          targetRecordId: recordB.id || `${recordB.batchId}_${j}`,
+          method,
+          score: mergeDecision.confidence,
+          metadata: {
+            reason: mergeDecision.reason,
+            matchedFields: mergeDecision.reason.split('Matched on: ')[1]?.split(', ') || [],
+          },
+          createdAt: new Date(),
+        });
+      }
+    }
+  }
+
+  logger.info(`Entity resolution completed: ${comparisons} comparisons, ${matchLinks.length} matches found`);
+
+  return { matchLinks, duplicatesFound: matchLinks.length };
 }
 
 /**

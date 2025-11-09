@@ -144,8 +144,84 @@ export function createNaturalKey(
 }
 
 /**
+ * Calculates Jaro similarity between two strings
+ * Jaro distance is a measure of similarity between two strings
+ */
+export function jaroSimilarity(s1: string, s2: string): number {
+  if (!s1 || !s2) return 0;
+  if (s1 === s2) return 1;
+
+  const len1 = s1.length;
+  const len2 = s2.length;
+
+  // Maximum distance for matching characters
+  const maxDist = Math.floor(Math.max(len1, len2) / 2) - 1;
+
+  // Count matching characters
+  let matches = 0;
+  const hash1 = new Array(len1).fill(false);
+  const hash2 = new Array(len2).fill(false);
+
+  for (let i = 0; i < len1; i++) {
+    const start = Math.max(0, i - maxDist);
+    const end = Math.min(len2, i + maxDist + 1);
+
+    for (let j = start; j < end; j++) {
+      if (!hash2[j] && s1[i] === s2[j]) {
+        hash1[i] = true;
+        hash2[j] = true;
+        matches++;
+        break;
+      }
+    }
+  }
+
+  if (matches === 0) return 0;
+
+  // Count transpositions
+  let transpositions = 0;
+  let point = 0;
+
+  for (let i = 0; i < len1; i++) {
+    if (hash1[i]) {
+      while (!hash2[point]) point++;
+      if (s1[i] !== s2[point++]) transpositions++;
+    }
+  }
+
+  transpositions /= 2;
+
+  // Calculate Jaro similarity
+  return (matches / len1 + matches / len2 + (matches - transpositions) / matches) / 3;
+}
+
+/**
+ * Calculates Jaro-Winkler similarity between two strings
+ * Jaro-Winkler gives higher scores to strings that match from the beginning
+ */
+export function jaroWinklerSimilarity(s1: string, s2: string, scalingFactor = 0.1): number {
+  const jaroSim = jaroSimilarity(s1, s2);
+  if (jaroSim === 0 || jaroSim === 1) return jaroSim;
+
+  // Count common prefix length (max 4)
+  let prefixLength = 0;
+  const maxPrefix = Math.min(4, s1.length, s2.length);
+
+  for (let i = 0; i < maxPrefix; i++) {
+    if (s1[i] === s2[i]) {
+      prefixLength++;
+    } else {
+      break;
+    }
+  }
+
+  return jaroSim + (prefixLength * scalingFactor * (1 - jaroSim));
+}
+
+/**
  * Calculates a simple similarity score between two strings
  * Uses Jaccard similarity based on character trigrams for basic fuzzy matching
+ * @deprecated Use jaroWinklerSimilarity for better name matching
  */
 export function calculateSimilarity(a: string, b: string): number {
   if (!a || !b) return 0;
