@@ -1,23 +1,37 @@
 {
   "name": "coreprojects",
   "version": "1.0.0",
-  "description": "Monorepo containing Catalog Service (.NET) and FinTech Platform (Java/Kotlin/Go/Node)",
+  "description": "Monorepo containing Catalog Service (.NET), FinTech Platform (Java/Kotlin/Go/Node), and Graph & Entity Resolution Lab",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "prepare": "husky install",
-    "lint": "echo 'Linting not yet configured'",
-    "test": "echo 'Testing handled by individual projects'",
-    "build": "echo 'Building handled by individual projects'"
+    "lint": "npm run lint --workspaces",
+    "lint:fix": "npm run lint:fix --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces",
+    "test:unit": "npm run test:unit --workspaces",
+    "test:int": "npm run test:int --workspaces",
+    "test:e2e": "npm run test:e2e --workspaces",
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces",
+    "docker:up": "docker-compose -f infra/graph-er/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infra/graph-er/docker-compose.yml down"
   },
   "lint-staged": {
     "*.{js,ts,tsx,json,md}": [
-      "echo 'Pre-commit checks would run here'"
+      "prettier --write",
+      "eslint --fix"
     ]
   },
   "devDependencies": {
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.6"
+    "lint-staged": "^16.2.6",
+    "prettier": "^3.3.3"
   }
 }
