@@ -43,6 +43,8 @@ products.MapGet("/{id:guid}", async (
     IMediator mediator,
     CancellationToken cancellationToken) =>
 {
+    // TODO: Add ownership validation - products should be scoped to user/tenant
+    // For now, allowing public read access (to be changed based on business requirements)
     var query = new GetProductQuery(id);
     var product = await mediator.Send(query, cancellationToken);
 

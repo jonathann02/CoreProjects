@@ -1,3 +1,4 @@
+using System.Data;
 using System.IO;
 using System.Reflection;
 using System.Text.Json.Serialization;
@@ -53,7 +54,7 @@ builder.Services.AddScoped<IDbConnection>(sp =>
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
 // MediatR
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateProductCommand).Assembly));
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Catalog.Application.Commands.CreateProductCommand).Assembly));
 
 // Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
