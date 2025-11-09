@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { logger } from '../utils/logger.js';
 import { UploadSessionSchema } from '@graph-er/shared';
+import { processETLBatch } from '../services/etl.js';
 
 // In-memory storage for upload sessions (use Redis in production)
 const uploadSessions = new Map<string, z.infer<typeof UploadSessionSchema>>();
@@ -180,21 +181,32 @@ export function createUploadRoutes(): express.Router {
         });
       }
 
-      // TODO: Trigger ETL pipeline here
-      // For now, just mark as completed
-      session.status = 'completed';
+      // Trigger ETL pipeline
+      const batchId = randomUUID();
+
+      // Start ETL processing asynchronously
+      processETLBatch(session.tempPath, batchId)
+        .then((result) => {
+          logger.info('ETL processing completed', { sessionId, batchId, result });
+          session.status = 'completed';
+        })
+        .catch((error) => {
+          logger.error('ETL processing failed', { error, sessionId, batchId });
+          session.status = 'failed';
+        });
 
       logger.info('Upload committed for processing', {
         sessionId,
         filename: session.filename,
         totalSize: session.uploadedSize,
+        batchId,
       });
 
       res.json({
         sessionId,
         status: 'processing',
         message: 'File uploaded successfully, ETL processing started',
-        batchId: randomUUID(), // TODO: Return actual batch ID from ETL
+        batchId,
       });
     } catch (error) {
       logger.error('Failed to commit upload', { error, sessionId });
