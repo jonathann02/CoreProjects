@@ -67,7 +67,7 @@ jobs:
         dotnet-coverage generate merged-coverage.json --output-format cobertura --output coverage.cobertura.xml
 
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       if: always()
       with:
         file: ./coverage.cobertura.xml
