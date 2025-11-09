@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -29,6 +32,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/payments")
 @Tag(name = "Payments", description = "Payment processing endpoints")
+@Validated
 public class PaymentController {
 
     private static final Logger logger = LoggerFactory.getLogger(PaymentController.class);
@@ -76,7 +80,7 @@ public class PaymentController {
     @PreAuthorize("hasAuthority('SCOPE_payments:read')")
     @Operation(summary = "Get payment by ID", description = "Retrieves payment information by payment ID")
     public ResponseEntity<PaymentDto> getPayment(
-            @PathVariable UUID id,
+            @PathVariable @NotNull UUID id,
             @AuthenticationPrincipal Jwt jwt) {
 
         logger.debug("Retrieving payment {} for user: {}", id, jwt.getSubject());
@@ -91,24 +95,19 @@ public class PaymentController {
      * Request DTO for initiating payments.
      */
     public record InitiatePaymentRequest(
-        UUID fromAccountId,
-        UUID toAccountId,
-        BigDecimal amount,
-        Currency currency,
+        @NotNull(message = "From account ID is required") UUID fromAccountId,
+        @NotNull(message = "To account ID is required") UUID toAccountId,
+        @NotNull(message = "Amount is required")
+        @Positive(message = "Amount must be positive") BigDecimal amount,
+        @NotNull(message = "Currency is required") Currency currency,
         String description
     ) {
         public InitiatePaymentRequest {
-            if (fromAccountId == null) {
-                throw new IllegalArgumentException("From account ID cannot be null");
+            if (fromAccountId != null && toAccountId != null && fromAccountId.equals(toAccountId)) {
+                throw new IllegalArgumentException("From and to account IDs cannot be the same");
             }
-            if (toAccountId == null) {
-                throw new IllegalArgumentException("To account ID cannot be null");
-            }
-            if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("Amount must be positive");
-            }
-            if (currency == null) {
-                throw new IllegalArgumentException("Currency cannot be null");
+            if (description != null && description.length() > 500) {
+                throw new IllegalArgumentException("Description cannot exceed 500 characters");
             }
         }
     }

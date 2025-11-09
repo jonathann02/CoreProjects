@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
+import expressRateLimit from 'express-rate-limit';
 
 import { logger } from '../utils/logger.js';
 import { UploadSessionSchema } from '@graph-er/shared';
@@ -11,6 +12,56 @@ import { processETLBatch } from '../services/etl.js';
 
 // In-memory storage for upload sessions (use Redis in production)
 const uploadSessions = new Map<string, z.infer<typeof UploadSessionSchema>>();
+
+/**
+ * Basic validation to check if content looks like valid CSV data.
+ * This is a simple check to prevent obviously malicious uploads.
+ */
+function isValidCSVContent(content: string): boolean {
+  if (!content || content.length === 0) {
+    return false;
+  }
+
+  // Check for binary content (null bytes or high ratio of non-printable chars)
+  const nonPrintableRatio = (content.match(/[^\x20-\x7E\t\n\r]/g) || []).length / content.length;
+  if (nonPrintableRatio > 0.1) { // More than 10% non-printable characters
+    return false;
+  }
+
+  // Check for very long lines (potential DoS)
+  const lines = content.split('\n');
+  const avgLineLength = content.length / lines.length;
+  if (avgLineLength > 10000) { // Average line longer than 10KB
+    return false;
+  }
+
+  // Check for CSV-like structure (at least one comma or semicolon delimiter)
+  const hasDelimiter = content.includes(',') || content.includes(';') || content.includes('\t');
+
+  // Allow content that looks like CSV or is the first chunk (might be headers only)
+  return hasDelimiter || lines.length <= 2;
+}
+
+// Rate limiting configuration
+const uploadRateLimit = expressRateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 upload requests per windowMs
+  message: {
+    error: 'Too many upload requests',
+    message: 'Upload rate limit exceeded. Please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.warn('Upload rate limit exceeded for IP: %s', req.ip);
+    res.status(429).json({
+      error: 'Too many upload requests',
+      message: 'Upload rate limit exceeded. Please try again later.',
+      retryAfter: '15 minutes'
+    });
+  }
+});
 
 // Configure multer for memory storage (we'll stream to disk)
 const upload = multer({
@@ -20,11 +71,26 @@ const upload = multer({
     files: 1,
   },
   fileFilter: (req, file, cb) => {
-    // Only allow CSV files
-    if (file.mimetype !== 'text/csv' && !file.originalname.endsWith('.csv')) {
-      cb(new Error('Only CSV files are allowed'));
+    // Strict CSV file validation
+    const allowedMimeTypes = ['text/csv', 'application/csv', 'text/plain'];
+    const allowedExtensions = ['.csv'];
+
+    // Check mimetype
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      logger.warn('Rejected file with invalid mimetype: %s', file.mimetype);
+      cb(new Error('Invalid file type. Only CSV files are allowed.'));
       return;
     }
+
+    // Check file extension
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+      logger.warn('Rejected file with invalid extension: %s', fileExtension);
+      cb(new Error('Invalid file extension. File must have .csv extension.'));
+      return;
+    }
+
+    // Basic content validation will be done in the route handler
     cb(null, true);
   },
 });
@@ -36,7 +102,7 @@ export function createUploadRoutes(): express.Router {
    * Start a new upload session
    * POST /v1/upload/start
    */
-  router.post('/upload/start', async (req, res) => {
+  router.post('/upload/start', uploadRateLimit, async (req, res) => {
     try {
       const sessionId = randomUUID();
       const tempDir = process.env.TEMP_DIR || '/tmp/graph-er-uploads';
@@ -85,7 +151,7 @@ export function createUploadRoutes(): express.Router {
    * Upload a chunk of the file
    * POST /v1/upload/:sessionId/chunk
    */
-  router.post('/upload/:sessionId/chunk', upload.single('chunk'), async (req, res) => {
+  router.post('/upload/:sessionId/chunk', uploadRateLimit, upload.single('chunk'), async (req, res) => {
     const { sessionId } = req.params;
     const chunkIndex = parseInt(req.body.chunkIndex) || 0;
 
@@ -117,6 +183,16 @@ export function createUploadRoutes(): express.Router {
         return res.status(400).json({
           error: 'No file chunk provided',
           code: 'NO_CHUNK_PROVIDED',
+        });
+      }
+
+      // Validate CSV content (basic check - ensure it's text and contains CSV-like structure)
+      const chunkContent = req.file.buffer.toString('utf8');
+      if (!isValidCSVContent(chunkContent)) {
+        logger.warn('Rejected chunk with invalid CSV content for session: %s', sessionId);
+        return res.status(400).json({
+          error: 'Invalid file content. File must contain valid CSV data.',
+          code: 'INVALID_CSV_CONTENT',
         });
       }
 
