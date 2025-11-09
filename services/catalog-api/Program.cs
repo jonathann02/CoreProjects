@@ -106,7 +106,7 @@ builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo("/app/data-protection-keys"))
     .SetApplicationName("CatalogSuite");
 
-// CORS (restrictive policy for development)
+// CORS (restrictive policy)
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -114,15 +114,28 @@ builder.Services.AddCors(options =>
         if (builder.Environment.IsDevelopment())
         {
             policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowCredentials()
+                  .WithHeaders("Authorization", "Content-Type", "X-Requested-With")
+                  .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
         }
         else
         {
-            // In production, restrict to specific origins
-            policy.AllowAnyOrigin()
-                  .WithMethods("GET")
-                  .AllowAnyHeader();
+            // In production, restrict to specific origins from configuration
+            var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+            if (allowedOrigins.Length > 0)
+            {
+                policy.WithOrigins(allowedOrigins)
+                      .AllowCredentials()
+                      .WithHeaders("Authorization", "Content-Type", "X-Requested-With")
+                      .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
+            }
+            else
+            {
+                // Fail-safe: deny all if no origins configured in production
+                policy.AllowCredentials()
+                      .WithHeaders()
+                      .WithMethods();
+            }
         }
     });
 });
@@ -160,10 +173,15 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
+
+    // Content Security Policy
+    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'";
 
     if (!app.Environment.IsDevelopment())
     {
-        context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+        context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload";
     }
 
     await next();

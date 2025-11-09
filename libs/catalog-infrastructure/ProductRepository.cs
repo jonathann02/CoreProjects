@@ -2,6 +2,7 @@ using System.Data;
 using Catalog.Domain;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Catalog.Infrastructure;
 
@@ -9,11 +10,13 @@ public class ProductRepository : IProductRepository
 {
     private readonly CatalogDbContext _dbContext;
     private readonly IDbConnection _dbConnection;
+    private readonly ILogger<ProductRepository> _logger;
 
-    public ProductRepository(CatalogDbContext dbContext, IDbConnection dbConnection)
+    public ProductRepository(CatalogDbContext dbContext, IDbConnection dbConnection, ILogger<ProductRepository> logger)
     {
         _dbContext = dbContext;
         _dbConnection = dbConnection;
+        _logger = logger;
     }
 
     // Write operations using EF Core
@@ -104,6 +107,9 @@ public class ProductRepository : IProductRepository
             {orderByClause}
             OFFSET @Offset ROWS
             FETCH NEXT @PageSize ROWS ONLY";
+
+        // Log query for debugging (remove sensitive data in production)
+        _logger.LogDebug("Executing query: {Sql}", sql);
 
         parameters.Add("@Offset", offset);
         parameters.Add("@PageSize", pageSize);
