@@ -151,7 +151,9 @@ public class Product : IEquatable<Product>
 
     public override bool Equals(object? obj)
     {
-        return Equals(obj as Product);
+        if (obj is null) return false;
+        if (obj.GetType() != typeof(Product)) return false;
+        return Equals((Product)obj);
     }
 
     public override int GetHashCode()
