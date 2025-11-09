@@ -251,7 +251,7 @@ jobs:
         syft packages . --output spdx-json=sbom.json
 
     - name: Upload SBOM
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: sbom
         path: sbom.json
