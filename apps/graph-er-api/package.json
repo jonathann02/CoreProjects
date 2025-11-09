@@ -1,0 +1,35 @@
+{
+  "name": "graph-er-api",
+  "version": "0.1.0",
+  "description": "Graph & Entity Resolution API - Express + Apollo GraphQL + REST",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:unit": "jest --testPathPattern=unit",
+    "test:int": "jest --testPathPattern=integration",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["graphql", "entity-resolution", "neo4j", "typescript"],
+  "author": "Graph & Entity Resolution Lab",
+  "license": "MIT",
+  "dependencies": {
+    "@graph-er/shared": "file:../../packages/shared",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^24.6.0",
+    "typescript": "~5.9.3"
+  }
+}
