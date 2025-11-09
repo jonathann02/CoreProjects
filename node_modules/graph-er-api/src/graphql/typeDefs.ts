@@ -100,6 +100,92 @@ export const typeDefs = gql`
     FAILED
   }
 
+  enum ETLOperation {
+    START
+    VALIDATION_COMPLETE
+    NORMALIZATION_COMPLETE
+    DEDUPLICATION_COMPLETE
+    CLUSTERING_COMPLETE
+    WRITING_COMPLETE
+    COMPLETE
+    FAILED
+  }
+
+  enum MatchRisk {
+    LOW
+    MEDIUM
+    HIGH
+  }
+
+  # Audit and analytics types
+  type BatchAuditSummary {
+    batchId: ID!
+    inputHash: String!
+    startTime: DateTime!
+    endTime: DateTime
+    totalRecords: Int!
+    validRecords: Int!
+    invalidRecords: Int!
+    duplicatesFound: Int!
+    clustersCreated: Int!
+    goldenRecordsCreated: Int!
+    processingTimeMs: Int!
+    errors: [String!]!
+    falsePositives: Int
+    falseNegatives: Int
+    manualReviews: Int
+  }
+
+  type ETLAuditEntry {
+    id: ID!
+    batchId: ID!
+    operation: ETLOperation!
+    inputHash: String!
+    timestamp: DateTime!
+    metadata: JSONObject
+    duration: Int
+    errorMessage: String
+  }
+
+  type MatchQualityAnalysis {
+    potentialFalsePositives: [MatchQualityIssue!]!
+    potentialFalseNegatives: [MatchQualityIssue!]!
+  }
+
+  type MatchQualityIssue {
+    sourceRecordId: ID!
+    targetRecordId: ID
+    score: Float!
+    reason: String!
+    risk: MatchRisk!
+  }
+
+  type BIAggregateMetrics {
+    totalGoldenRecords: Int!
+    totalSourceRecords: Int!
+    totalBatches: Int!
+    totalClusters: Int!
+    avgDuplicatesPerBatch: Float!
+    avgProcessingTimeMs: Float!
+    matchAccuracyRate: Float!
+    topMatchMethods: [MatchMethodStats!]!
+    processingTrends: [ProcessingTrend!]!
+  }
+
+  type MatchMethodStats {
+    method: MatchMethod!
+    count: Int!
+    avgScore: Float!
+    accuracy: Float!
+  }
+
+  type ProcessingTrend {
+    date: String!
+    batchesProcessed: Int!
+    recordsProcessed: Int!
+    avgProcessingTime: Float!
+  }
+
   # Pagination
   type PaginationInfo {
     page: Int!
@@ -164,6 +250,15 @@ export const typeDefs = gql`
       pagination: PaginationInput
       status: BatchStatus
     ): BatchesResult!
+
+    # Audit and analytics
+    batchAuditSummary(batchId: ID!): BatchAuditSummary
+    batchAuditTrail(batchId: ID!): [ETLAuditEntry!]!
+    matchQualityAnalysis(batchId: ID!): MatchQualityAnalysis!
+    biAggregateMetrics(
+      startDate: DateTime
+      endDate: DateTime
+    ): BIAggregateMetrics!
 
     # Health check
     health: String!
