@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { jwtVerify } from 'jose';
+import { jwtVerify, importJwk } from 'jose';
 import { logger } from '../utils/logger';
 
 // Extend Express Request to include user
@@ -41,9 +41,9 @@ export const jwtAuth = async (req: Request, res: Response, next: NextFunction) =
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Get JWKS endpoint from environment
-    const jwksUrl = process.env.KEYCLOAK_ISSUER_URL;
-    if (!jwksUrl) {
+    // Get Keycloak issuer URL from environment
+    const issuerUrl = process.env.KEYCLOAK_ISSUER_URL;
+    if (!issuerUrl) {
       logger.error('KEYCLOAK_ISSUER_URL environment variable not set');
       return res.status(500).json({
         error: 'Configuration Error',
@@ -51,23 +51,36 @@ export const jwtAuth = async (req: Request, res: Response, next: NextFunction) =
       });
     }
 
-    // For simplicity in this implementation, we'll use a mock verification
-    // In production, you'd fetch JWKS from Keycloak and verify the token
     try {
-      // Mock JWT verification - in production, use proper JWKS verification
-      const mockPayload: JWTPayload = {
-        sub: 'user-123',
-        scope: 'accounts:read accounts:write payments:read payments:write',
-        preferred_username: 'testuser',
+      // Fetch JWKS from Keycloak
+      const jwksUrl = `${issuerUrl}/protocol/openid-connect/certs`;
+      const jwksResponse = await fetch(jwksUrl);
+      if (!jwksResponse.ok) {
+        throw new Error(`Failed to fetch JWKS: ${jwksResponse.status}`);
+      }
+
+      const jwks = await jwksResponse.json();
+
+      // Find the RSA public key for RS256
+      const rsaKey = jwks.keys.find((key: any) => key.kty === 'RSA' && key.use === 'sig');
+      if (!rsaKey) {
+        throw new Error('No RSA signing key found in JWKS');
+      }
+
+      // Import the public key
+      const publicKey = await importJwk(rsaKey);
+
+      // Verify the JWT token
+      const { payload } = await jwtVerify(token, publicKey, {
+        issuer: issuerUrl,
+        audience: 'gateway', // Should match the client ID in Keycloak
+      });
+
+      req.user = {
+        sub: payload.sub!,
+        scope: payload.scope || '',
+        ...payload,
       };
-
-      // In a real implementation, you'd do:
-      // const { payload } = await jwtVerify(token, jwks, {
-      //   issuer: jwksUrl,
-      //   audience: 'gateway',
-      // });
-
-      req.user = mockPayload;
 
       logger.debug('JWT authentication successful', {
         userId: req.user.sub,

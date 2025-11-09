@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -102,6 +103,164 @@ func (l *Limit) IsExpired() bool {
 func (l *Limit) Reset() {
 	l.Used = 0
 	l.UpdatedAt = time.Now().UTC()
+}
+
+// ScoringResult represents the result of a credit scoring evaluation
+type ScoringResult struct {
+	Score       int     `json:"score"`        // Score from 0-1000
+	Grade       string  `json:"grade"`        // A, B, C, D, F
+	RiskLevel   string  `json:"risk_level"`   // Low, Medium, High, Very High
+	Approved    bool    `json:"approved"`     // Whether the application is approved
+	MaxAmount   float64 `json:"max_amount"`   // Maximum approved amount
+	Reason      string  `json:"reason"`       // Reason for decision
+	CalculatedAt time.Time `json:"calculated_at"`
+}
+
+// ScoringService provides credit scoring functionality
+type ScoringService struct{}
+
+// NewScoringService creates a new scoring service
+func NewScoringService() *ScoringService {
+	return &ScoringService{}
+}
+
+// AuditEntry represents an audit log entry
+type AuditEntry struct {
+	ID          string    `json:"id"`
+	EventType   string    `json:"event_type"`
+	AccountID   string    `json:"account_id"`
+	UserID      string    `json:"user_id,omitempty"`
+	Action      string    `json:"action"`
+	Resource    string    `json:"resource"`
+	Details     string    `json:"details"`
+	IPAddress   string    `json:"ip_address,omitempty"`
+	UserAgent   string    `json:"user_agent,omitempty"`
+	Timestamp   time.Time `json:"timestamp"`
+	Severity    string    `json:"severity"` // INFO, WARN, ERROR
+}
+
+// AuditService provides audit logging functionality
+type AuditService struct{}
+
+// NewAuditService creates a new audit service
+func NewAuditService() *AuditService {
+	return &AuditService{}
+}
+
+// LogAction logs an audit action
+func (a *AuditService) LogAction(eventType, accountID, userID, action, resource, details, ipAddress, userAgent, severity string) *AuditEntry {
+	return &AuditEntry{
+		ID:        generateID(),
+		EventType: eventType,
+		AccountID: accountID,
+		UserID:    userID,
+		Action:    action,
+		Resource:  resource,
+		Details:   details,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
+		Timestamp: time.Now().UTC(),
+		Severity:  severity,
+	}
+}
+
+// generateID generates a simple ID for audit entries
+func generateID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// EvaluateScore performs credit scoring evaluation (stub implementation)
+func (s *ScoringService) EvaluateScore(accountID string, requestedAmount float64, accountAgeDays int, previousPayments int) *ScoringResult {
+	now := time.Now().UTC()
+
+	// Simple scoring algorithm (stub - in production, this would integrate with credit bureaus, ML models, etc.)
+	baseScore := 500 // Starting score
+
+	// Account age factor (newer accounts = higher risk)
+	if accountAgeDays < 30 {
+		baseScore -= 100
+	} else if accountAgeDays > 365 {
+		baseScore += 50
+	}
+
+	// Previous payments factor (more payments = lower risk)
+	if previousPayments > 10 {
+		baseScore += 100
+	} else if previousPayments > 5 {
+		baseScore += 50
+	} else if previousPayments == 0 {
+		baseScore -= 50
+	}
+
+	// Amount factor (higher amounts = higher risk)
+	if requestedAmount > 10000 {
+		baseScore -= 50
+	} else if requestedAmount < 1000 {
+		baseScore += 25
+	}
+
+	// Ensure score is within bounds
+	if baseScore > 850 {
+		baseScore = 850
+	} else if baseScore < 300 {
+		baseScore = 300
+	}
+
+	// Determine grade and risk level
+	var grade, riskLevel string
+	var approved bool
+	var maxAmount float64
+	var reason string
+
+	switch {
+	case baseScore >= 750:
+		grade = "A"
+		riskLevel = "Low"
+		approved = true
+		maxAmount = requestedAmount * 1.5
+		reason = "Excellent credit profile"
+	case baseScore >= 650:
+		grade = "B"
+		riskLevel = "Low"
+		approved = true
+		maxAmount = requestedAmount * 1.2
+		reason = "Good credit profile"
+	case baseScore >= 550:
+		grade = "C"
+		riskLevel = "Medium"
+		approved = requestedAmount <= 5000
+		if approved {
+			maxAmount = requestedAmount
+			reason = "Moderate credit profile"
+		} else {
+			reason = "Amount exceeds approved limit for credit score"
+		}
+	case baseScore >= 450:
+		grade = "D"
+		riskLevel = "High"
+		approved = requestedAmount <= 1000
+		if approved {
+			maxAmount = requestedAmount * 0.5
+			reason = "Below average credit profile"
+		} else {
+			reason = "Insufficient credit score for requested amount"
+		}
+	default:
+		grade = "F"
+		riskLevel = "Very High"
+		approved = false
+		reason = "Poor credit profile - application declined"
+	}
+
+	return &ScoringResult{
+		Score:        baseScore,
+		Grade:        grade,
+		RiskLevel:    riskLevel,
+		Approved:     approved,
+		MaxAmount:    maxAmount,
+		Reason:       reason,
+		CalculatedAt: now,
+	}
 }
 
 // LimitCheckResult represents the result of a limit check

@@ -1,0 +1,38 @@
+{
+  "name": "@graph-er/shared",
+  "version": "0.1.0",
+  "description": "Shared types, schemas, and utilities for Graph & Entity Resolution Lab",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:unit": "jest --testPathPattern=unit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["entity-resolution", "graph", "typescript", "zod"],
+  "author": "Graph & Entity Resolution Lab",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^24.6.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.4",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}

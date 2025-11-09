@@ -83,6 +83,9 @@ func main() {
 	// Limits evaluation endpoint
 	router.HandleFunc("/limits/evaluate", limitsHandler.EvaluateLimit).Methods("POST")
 
+	// Loan application endpoint
+	router.HandleFunc("/loans/apply", limitsHandler.ApplyForLoan).Methods("POST")
+
 	// Metrics endpoint
 	router.Handle("/metrics", promhttp.Handler()).Methods("GET")
 

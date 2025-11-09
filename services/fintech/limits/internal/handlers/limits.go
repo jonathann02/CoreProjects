@@ -19,14 +19,18 @@ import (
 
 // LimitsHandler handles HTTP requests for limit operations
 type LimitsHandler struct {
-	repo   *infrastructure.LimitRepository
-	config *config.Config
+	repo          *infrastructure.LimitRepository
+	scoringSvc    *domain.ScoringService
+	auditSvc      *domain.AuditService
+	config        *config.Config
 }
 
 // NewLimitsHandler creates a new limits handler
 func NewLimitsHandler(db *database.DB) *LimitsHandler {
 	return &LimitsHandler{
-		repo: infrastructure.NewLimitRepository(db),
+		repo:       infrastructure.NewLimitRepository(db),
+		scoringSvc: domain.NewScoringService(),
+		auditSvc:   domain.NewAuditService(),
 	}
 }
 
@@ -164,6 +168,117 @@ func (h *LimitsHandler) HandlePaymentEvent(event *kafka.PaymentInitiatedEvent) e
 	return nil
 }
 
+// ApplyForLoan handles POST /loans/apply
+func (h *LimitsHandler) ApplyForLoan(w http.ResponseWriter, r *http.Request) {
+	ctx, span := otel.StartSpan(r.Context(), "ApplyForLoan")
+	defer span.End()
+
+	var req LoanApplicationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logrus.WithError(err).Error("Failed to decode loan application request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	otel.AddSpanAttributes(span,
+		otel.Attribute("account_id", req.AccountID),
+		otel.Attribute("amount", req.Amount),
+		otel.Attribute("loan_type", req.LoanType),
+	)
+
+	// Validate request
+	if req.AccountID == "" || req.Amount <= 0 {
+		http.Error(w, "Invalid request parameters", http.StatusBadRequest)
+		return
+	}
+
+	// Get account age and payment history (stub implementation)
+	accountAgeDays := h.getAccountAge(req.AccountID)
+	previousPayments := h.getPreviousPayments(req.AccountID)
+
+	// Perform credit scoring
+	scoringResult := h.scoringSvc.EvaluateScore(req.AccountID, req.Amount, accountAgeDays, previousPayments)
+
+	// Create audit entry
+	auditEntry := h.auditSvc.LogAction(
+		"LoanApplication",
+		req.AccountID,
+		req.UserID,
+		"APPLY",
+		"loan",
+		fmt.Sprintf("Loan application for $%.2f, score: %d, approved: %v", req.Amount, scoringResult.Score, scoringResult.Approved),
+		r.RemoteAddr,
+		r.Header.Get("User-Agent"),
+		"INFO",
+	)
+
+	logrus.WithFields(logrus.Fields{
+		"account_id":   req.AccountID,
+		"user_id":      req.UserID,
+		"amount":       req.Amount,
+		"score":        scoringResult.Score,
+		"approved":     scoringResult.Approved,
+		"audit_entry":  auditEntry.ID,
+	}).Info("Loan application processed")
+
+	// If approved, create/update limit
+	var limitResult *domain.LimitCheckResult
+	if scoringResult.Approved {
+		var err error
+		limitResult, err = h.repo.CheckAndSpend(
+			ctx,
+			req.AccountID,
+			domain.MonthlyLimit, // Loan limits are typically monthly
+			scoringResult.MaxAmount,
+			scoringResult.MaxAmount, // Set limit to approved amount
+			"USD", // Default currency
+		)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to create loan limit")
+			http.Error(w, "Failed to process loan limit", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Prepare response
+	response := LoanApplicationResponse{
+		ApplicationID: auditEntry.ID,
+		AccountID:     req.AccountID,
+		Amount:        req.Amount,
+		ScoringResult: *scoringResult,
+		AuditEntry:    *auditEntry,
+	}
+
+	if limitResult != nil {
+		response.LimitResult = limitResult
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// getAccountAge returns account age in days (stub implementation)
+func (h *LimitsHandler) getAccountAge(accountID string) int {
+	// In a real implementation, this would query the accounts service
+	// For now, return a random-ish value based on account ID
+	hash := 0
+	for _, char := range accountID {
+		hash += int(char)
+	}
+	return (hash % 365) + 30 // Between 30-395 days
+}
+
+// getPreviousPayments returns number of previous payments (stub implementation)
+func (h *LimitsHandler) getPreviousPayments(accountID string) int {
+	// In a real implementation, this would query payment history
+	// For now, return a value based on account ID
+	hash := 0
+	for _, char := range accountID {
+		hash += int(char)
+	}
+	return hash % 20 // 0-19 payments
+}
+
 // HealthCheck handles GET /health
 func HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -180,6 +295,25 @@ type EvaluateLimitRequest struct {
 	LimitType string  `json:"limitType"`
 	Amount    float64 `json:"amount"`
 	Currency  string  `json:"currency"`
+}
+
+// LoanApplicationRequest represents a loan application request
+type LoanApplicationRequest struct {
+	AccountID string  `json:"accountId"`
+	UserID    string  `json:"userId,omitempty"`
+	Amount    float64 `json:"amount"`
+	LoanType  string  `json:"loanType,omitempty"`
+	Currency  string  `json:"currency,omitempty"`
+}
+
+// LoanApplicationResponse represents the response for a loan application
+type LoanApplicationResponse struct {
+	ApplicationID string                   `json:"applicationId"`
+	AccountID     string                   `json:"accountId"`
+	Amount        float64                  `json:"amount"`
+	ScoringResult domain.ScoringResult     `json:"scoringResult"`
+	AuditEntry    domain.AuditEntry        `json:"auditEntry"`
+	LimitResult   *domain.LimitCheckResult `json:"limitResult,omitempty"`
 }
 
 func (h *LimitsHandler) getDefaultLimit(limitType domain.LimitType) float64 {

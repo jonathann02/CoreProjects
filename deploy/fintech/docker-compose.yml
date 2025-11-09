@@ -24,12 +24,14 @@ services:
       - fintech
 
   # Redis for caching and rate limiting
+  # CRITICAL: Pinned to >= 8.2.2 due to CVE-2025-49844 (Lua sandbox escape/RCE)
+  # Reference: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-49844
   redis:
-    image: redis:7-alpine
+    image: redis:8.2.2-alpine
     container_name: fintech-redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --requirepass fintech_redis_pass
+    command: redis-server --appendonly yes --requirepass fintech_redis_pass --disable-eval
     volumes:
       - redis_data:/data
     healthcheck:
