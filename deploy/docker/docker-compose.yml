@@ -12,9 +12,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080;https://+:8081
-      - ConnectionStrings__CatalogDatabase=Server=sqledge;Database=CatalogDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;
-      - Auth__Authority=https://localhost:5001
-      - Auth__Audience=catalog-api
+      - ConnectionStrings__CatalogDatabase=Server=sqledge;Database=CatalogDb;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - Auth__Authority=${AUTH_AUTHORITY:-https://localhost:5001}
+      - Auth__Audience=${AUTH_AUDIENCE:-catalog-api}
       - IpRateLimiting__EnableEndpointRateLimiting=true
       - IpRateLimiting__GeneralRules__0__Endpoint=*
       - IpRateLimiting__GeneralRules__0__Period=1m
@@ -36,7 +36,7 @@ services:
       - "1433:1433"
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=YourStrong!Passw0rd
+      - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
     volumes:
       - sqledge_data:/var/opt/mssql
@@ -44,7 +44,7 @@ services:
     networks:
       - catalog-network
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong!Passw0rd -Q 'SELECT 1'"]
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${DB_PASSWORD} -Q 'SELECT 1'"]
       interval: 10s
       timeout: 5s
       retries: 5

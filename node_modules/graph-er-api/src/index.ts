@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { register, collectDefaultMetrics } from 'prom-client';
+import jwt from 'jsonwebtoken';
 
 import { createHealthRoutes } from './routes/health.js';
 import { createUploadRoutes } from './routes/upload.js';
@@ -60,6 +61,25 @@ app.use(cors({
 // Compression
 app.use(compression());
 
+// JWT Authentication middleware
+const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-key-change-in-production') as any;
+    (req as any).user = decoded;
+    next();
+  } catch (error) {
+    logger.warn('Invalid JWT token', { error: error.message });
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+};
+
 // Request logging
 app.use(pinoHttp({
   logger,
@@ -85,6 +105,37 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health and metrics routes
 app.use('/', createHealthRoutes());
+
+// Auth endpoint for testing
+app.post('/auth/login', (req, res) => {
+  const { username, password } = req.body;
+
+  // Simple test auth - in production this would validate against a real auth service
+  if (username === 'admin' && password === 'password') {
+    const token = jwt.sign(
+      {
+        userId: 'admin-user',
+        username: 'admin',
+        roles: ['ADMIN'],
+        email: 'admin@example.com'
+      },
+      process.env.JWT_SECRET || 'fallback-secret-key-change-in-production',
+      { expiresIn: '1h' }
+    );
+
+    res.json({
+      access_token: token,
+      user: {
+        id: 'admin-user',
+        username: 'admin',
+        email: 'admin@example.com',
+        roles: ['ADMIN']
+      }
+    });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
 app.use('/metrics', async (req, res) => {
   try {
     const metrics = await register.metrics();
@@ -96,7 +147,8 @@ app.use('/metrics', async (req, res) => {
   }
 });
 
-// Upload routes (REST API)
+// Upload routes (REST API) - protected
+app.use('/v1/upload', authenticateToken);
 app.use('/v1', createUploadRoutes());
 
 // Global error handler

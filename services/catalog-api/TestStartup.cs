@@ -57,7 +57,7 @@ public class TestStartup
         services.AddScoped<GetProductQueryHandler>();
         services.AddScoped<GetProductsQueryHandler>();
 
-        // Simplified auth for testing (no JWT validation)
+        // Test auth configuration with known signing key
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -68,8 +68,9 @@ public class TestStartup
                 {
                     ValidateIssuer = false,
                     ValidateAudience = false,
-                    ValidateLifetime = false,
-                    ValidateIssuerSigningKey = false,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("test-secret-key-for-integration-tests-only")),
                     ClockSkew = TimeSpan.Zero
                 };
             });
@@ -77,7 +78,8 @@ public class TestStartup
         // Authorization policies
         services.AddAuthorizationBuilder()
             .AddPolicy("products:write", policy =>
-                policy.RequireAuthenticatedUser());
+                policy.RequireAuthenticatedUser()
+                      .RequireRole("ADMIN"));
 
         // Health checks
         services.AddHealthChecks()

@@ -1,6 +1,9 @@
 #pragma warning disable CS8632, CS8604
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using Catalog.Application.DTOs;
 using Catalog.Application.Queries;
 using Catalog.Infrastructure;
@@ -9,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using Testcontainers.MsSql;
 using Xunit;
 
@@ -55,8 +59,49 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
         return _client!;
     }
 
+    private string GenerateJwtToken(string userId = "test-user", string[] roles = null)
+    {
+        roles ??= new[] { "ADMIN" };
+
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId),
+            new Claim(ClaimTypes.Name, "test@example.com"),
+            new Claim("username", "testuser"),
+            new Claim(JwtRegisteredClaimNames.Sub, userId),
+            new Claim(JwtRegisteredClaimNames.Email, "test@example.com")
+        };
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+            claims.Add(new Claim("roles", role)); // Custom claim for our app
+        }
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("test-secret-key-for-integration-tests-only"));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: "test-issuer",
+            audience: "catalog-api",
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(1),
+            signingCredentials: credentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private HttpClient GetAuthenticatedClient(string userId = "test-user", string[] roles = null)
+    {
+        var client = _factory!.CreateClient();
+        var token = GenerateJwtToken(userId, roles);
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
     [Fact]
-    public async Task CreateProduct_ShouldReturnCreatedProduct()
+    public async Task CreateProduct_WithAuthentication_ShouldReturnCreatedProduct()
     {
         // Arrange
         var request = new
@@ -70,7 +115,7 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
         };
 
         // Act
-        var response = await GetClient().PostAsJsonAsync("/v1/products", request);
+        var response = await GetAuthenticatedClient().PostAsJsonAsync("/v1/products", request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -88,7 +133,28 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetProduct_ShouldReturnExistingProduct()
+    public async Task CreateProduct_WithoutAuthentication_ShouldReturnUnauthorized()
+    {
+        // Arrange
+        var request = new
+        {
+            Sku = "UNAUTHCREATE",
+            Name = "Unauthorized Create Product",
+            Description = "Product created without auth",
+            Price = 19.99m,
+            Currency = "USD",
+            StockQty = 5
+        };
+
+        // Act
+        var response = await GetClient().PostAsJsonAsync("/v1/products", request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetProduct_WithAuthentication_ShouldReturnExistingProduct()
     {
         // Arrange
         var createRequest = new
@@ -101,11 +167,11 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
             StockQty = 5
         };
 
-        var createResponse = await _client.PostAsJsonAsync("/v1/products", createRequest);
+        var createResponse = await GetAuthenticatedClient().PostAsJsonAsync("/v1/products", createRequest);
         var createdProduct = await createResponse.Content.ReadFromJsonAsync<ProductDto>();
 
         // Act
-        var response = await GetClient().GetAsync($"/v1/products/{createdProduct!.Id}");
+        var response = await GetAuthenticatedClient().GetAsync($"/v1/products/{createdProduct!.Id}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -115,6 +181,30 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
         product!.Id.Should().Be(createdProduct.Id);
         product.Sku.Should().Be(createRequest.Sku);
         product.Name.Should().Be(createRequest.Name);
+    }
+
+    [Fact]
+    public async Task GetProduct_WithoutAuthentication_ShouldReturnUnauthorized()
+    {
+        // Arrange
+        var createRequest = new
+        {
+            Sku = "UNAUTHGETTEST",
+            Name = "Unauthorized Get Test Product",
+            Description = "Product for unauthorized get test",
+            Price = 29.99m,
+            Currency = "USD",
+            StockQty = 10
+        };
+
+        var createResponse = await GetAuthenticatedClient().PostAsJsonAsync("/v1/products", createRequest);
+        var createdProduct = await createResponse.Content.ReadFromJsonAsync<ProductDto>();
+
+        // Act - Try to get product without authentication
+        var response = await GetClient().GetAsync($"/v1/products/{createdProduct!.Id}");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -140,7 +230,7 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
 
         foreach (var product in products)
         {
-            await _client.PostAsJsonAsync("/v1/products", product);
+            await GetAuthenticatedClient().PostAsJsonAsync("/v1/products", product);
         }
 
         // Act
@@ -172,7 +262,7 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
             StockQty = 15
         };
 
-        var createResponse = await _client.PostAsJsonAsync("/v1/products", createRequest);
+        var createResponse = await GetAuthenticatedClient().PostAsJsonAsync("/v1/products", createRequest);
         var createdProduct = await createResponse.Content.ReadFromJsonAsync<ProductDto>();
 
         var updateRequest = new
@@ -236,11 +326,11 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
             StockQty = 1
         };
 
-        var createResponse = await _client.PostAsJsonAsync("/v1/products", createRequest);
+        var createResponse = await GetAuthenticatedClient().PostAsJsonAsync("/v1/products", createRequest);
         var createdProduct = await createResponse.Content.ReadFromJsonAsync<ProductDto>();
 
         // Act - Delete
-        var deleteResponse = await _client.DeleteAsync($"/v1/products/{createdProduct!.Id}");
+        var deleteResponse = await GetAuthenticatedClient().DeleteAsync($"/v1/products/{createdProduct!.Id}");
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Assert - Should not be found when getting by ID
@@ -299,14 +389,14 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
             StockQty = 10
         };
 
-        var createResponse = await _client.PostAsJsonAsync("/v1/products", createRequest);
+        var createResponse = await GetAuthenticatedClient().PostAsJsonAsync("/v1/products", createRequest);
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var product = await createResponse.Content.ReadFromJsonAsync<ProductDto>();
         product.Should().NotBeNull();
 
         // Read
-        var getResponse = await _client.GetAsync($"/v1/products/{product!.Id}");
+        var getResponse = await GetAuthenticatedClient().GetAsync($"/v1/products/{product!.Id}");
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var retrievedProduct = await getResponse.Content.ReadFromJsonAsync<ProductDto>();
@@ -322,7 +412,7 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
             StockQty = 15
         };
 
-        var updateResponse = await _client.PutAsJsonAsync($"/v1/products/{product.Id}", updateRequest);
+        var updateResponse = await GetAuthenticatedClient().PutAsJsonAsync($"/v1/products/{product.Id}", updateRequest);
         updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var updatedProduct = await updateResponse.Content.ReadFromJsonAsync<ProductDto>();
@@ -330,12 +420,33 @@ public class CatalogApiIntegrationTests : IAsyncLifetime
         updatedProduct.Price.Should().Be(updateRequest.Price);
 
         // Delete
-        var deleteResponse = await _client.DeleteAsync($"/v1/products/{product.Id}");
+        var deleteResponse = await GetAuthenticatedClient().DeleteAsync($"/v1/products/{product.Id}");
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Verify deletion
-        var finalGetResponse = await _client.GetAsync($"/v1/products/{product.Id}");
+        var finalGetResponse = await GetAuthenticatedClient().GetAsync($"/v1/products/{product.Id}");
         finalGetResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task CreateProduct_WithInsufficientRole_ShouldReturnForbidden()
+    {
+        // Arrange - Create user with VIEWER role (not ADMIN)
+        var request = new
+        {
+            Sku = "NOROLECREATE",
+            Name = "No Role Create Product",
+            Description = "Product created with insufficient role",
+            Price = 9.99m,
+            Currency = "USD",
+            StockQty = 1
+        };
+
+        // Act - Try to create with VIEWER role only
+        var response = await GetAuthenticatedClient("viewer-user", new[] { "VIEWER" }).PostAsJsonAsync("/v1/products", request);
+
+        // Assert - Should be forbidden due to missing role
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }
 
