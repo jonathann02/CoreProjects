@@ -50,7 +50,7 @@ jobs:
         ConnectionStrings__CatalogDatabase: Server=localhost;Database=CatalogDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;
 
     - name: Upload test results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       if: always()
       with:
         name: test-results
@@ -137,7 +137,7 @@ jobs:
         cd ../admin-ui && cyclonedx-npm --output-file sbom-admin-ui.json
 
     - name: Upload SBOM artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: sbom-artifacts
         path: |
